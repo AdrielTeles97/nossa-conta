@@ -2,6 +2,8 @@
 import { Wallet, Landmark, Home, PiggyBank, Settings } from "lucide-react";
 import Link from "next/link";
 import { LogoutButton } from "@/components/logout-button";
+import { MobileNav } from "./_components/MobileNav";
+import { BottomNav } from "./_components/BottomNav";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const menuItems = [
@@ -55,16 +57,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
         
-        {/* Header Mobile (visível apenas em telas pequenas) */}
-        <header className="md:hidden bg-[#FBFAF6] border-b border-[#D9D6C9] p-4 flex items-center justify-between">
-          <span className="font-heading font-semibold text-lg">Nossa Conta</span>
-          {/* Menu mobile simplificado se necessário */}
+        {/* Header Mobile — shadcn Sheet, mobile-first */}
+        <header className="md:hidden sticky top-0 z-30 bg-[#FBFAF6]/95 backdrop-blur border-b border-[#D9D6C9] p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MobileNav />
+            <span className="font-heading font-semibold text-[16px] text-[#1B2430]">Nossa Conta</span>
+          </div>
+          <span className="text-[11px] tracking-widest uppercase font-semibold text-[#8A8D82]">Finanças</span>
         </header>
 
         {/* Container das Páginas */}
-        <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">
+        <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden pb-20 md:pb-8">
           {children}
         </main>
+        <BottomNav />
       </div>
 
     </div>
