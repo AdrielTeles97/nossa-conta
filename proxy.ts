@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export default async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   // Better Auth pode usar prefixo __Secure- em produção
   const sessionToken =
     request.cookies.get("better-auth.session_token") ||
