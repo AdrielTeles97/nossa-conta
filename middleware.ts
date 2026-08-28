@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export default async function middleware(request: NextRequest) {
-  // Pega o cookie de sessão do Better Auth
-  const sessionToken = request.cookies.get("better-auth.session_token");
+  // Better Auth pode usar prefixo __Secure- em produção
+  const sessionToken =
+    request.cookies.get("better-auth.session_token") ||
+    request.cookies.get("__Secure-better-auth.session_token");
 
   // Se tentar acessar o /dashboard ou qualquer sub-rota sem token, manda pro login
   if (request.nextUrl.pathname.startsWith("/dashboard") && !sessionToken) {

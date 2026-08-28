@@ -38,7 +38,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#F1F0EA] p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold font-fraunces text-[#1B2430]">Meu Ledger</CardTitle>
+          <CardTitle className="text-2xl font-bold font-heading text-[#1B2430]">Nossa Conta</CardTitle>
           <CardDescription>Acesse seu controle financeiro.</CardDescription>
         </CardHeader>
         <CardContent>

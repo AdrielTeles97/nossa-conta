@@ -1,15 +1,15 @@
 // src/app/dashboard/layout.tsx
-import { Wallet, Landmark, Home, PiggyBank, LogOut } from "lucide-react";
+import { Wallet, Landmark, Home, PiggyBank, Settings } from "lucide-react";
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client"; // ou redirecionamento via Server Action de logout
-import { redirect } from "next/navigation";
+import { LogoutButton } from "@/components/logout-button";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const menuItems = [
     { name: "Visão geral", path: "/dashboard", icon: Wallet },
-    { name: "Orçamento", path: "/dashboard/orcamento", icon: Landmark },
+    { name: "Gastos Mensais", path: "/dashboard/orcamento", icon: Landmark },
     { name: "Patrimônio", path: "/dashboard/patrimonio", icon: Home },
     { name: "Investimentos", path: "/dashboard/investimentos", icon: PiggyBank },
+    { name: "Configurações", path: "/dashboard/configuracoes", icon: Settings },
   ];
 
   return (
@@ -21,10 +21,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Logo / Título */}
           <div className="mb-8">
             <span className="text-[11px] tracking-widest text-[#8A8D82] uppercase font-semibold">
-              Meu Ledger
+              Nossa Conta
             </span>
-            <h2 className="font-fraunces text-2xl font-semibold text-[#1B2430] mt-1">
-              Painel Financeiro
+            <h2 className="font-heading text-2xl font-semibold text-[#1B2430] mt-1">
+              Finanças em família
             </h2>
           </div>
 
@@ -48,20 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="text-xs text-[#8A8D82] mb-2 font-mono truncate">
             Sessão Ativa
           </div>
-          <form
-            action={async () => {
-              "use server";
-              // Aqui podemos chamar o encerramento de sessão ou redirecionar para login
-              redirect("/login");
-            }}
-          >
-            <button
-              type="submit"
-              className="flex items-center gap-2 text-xs font-semibold text-[#B23B3B] hover:opacity-80 transition-opacity w-full"
-            >
-              <LogOut size={14} /> Sair da conta
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </aside>
 
@@ -70,12 +57,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         
         {/* Header Mobile (visível apenas em telas pequenas) */}
         <header className="md:hidden bg-[#FBFAF6] border-b border-[#D9D6C9] p-4 flex items-center justify-between">
-          <span className="font-fraunces font-semibold text-lg">Meu Ledger</span>
+          <span className="font-heading font-semibold text-lg">Nossa Conta</span>
           {/* Menu mobile simplificado se necessário */}
         </header>
 
         {/* Container das Páginas */}
-        <main className="flex-1 max-w-6xl w-full mx-auto p-6 sm:p-8">
+        <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">
           {children}
         </main>
       </div>
