@@ -61,6 +61,10 @@ model Account {
   scope                 String?
   password              String?
   
+  // Campos novos que o Better Auth exige agora
+  idToken               String?
+  issuer                String?
+  
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   createdAt             DateTime  @default(now())
