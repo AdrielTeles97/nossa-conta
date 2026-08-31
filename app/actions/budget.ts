@@ -145,11 +145,13 @@ export async function addFixedExpense(formData: FormData) {
   const value = parseCurrency(formData.get("value") as string);
   const category = formData.get("category") as string;
   const dueDay = parseInt(formData.get("dueDay") as string);
+  const period = (formData.get("period") as string) || null;
+  const isRecurring = formData.get("isRecurring") === "on" || formData.get("isRecurring") === "true";
 
   if (!name || isNaN(value) || !category || isNaN(dueDay)) return;
 
   await prisma.fixedExpense.create({
-    data: { name, value, category, dueDay, userId: user.id, householdId }
+    data: { name, value, category, dueDay, period: isRecurring ? null : period, isRecurring, userId: user.id, householdId }
   });
 
   revalidateBudgetPaths();
@@ -161,8 +163,10 @@ export async function updateFixedExpense(formData: FormData) {
   const value = parseCurrency(formData.get('value') as string);
   const category = formData.get('category') as string;
   const dueDay = parseInt(formData.get('dueDay') as string);
+  const period = (formData.get("period") as string) || null;
+  const isRecurring = formData.get("isRecurring") === "on" || formData.get("isRecurring") === "true";
   if (!id || !name || isNaN(value) || !category || isNaN(dueDay)) return;
-  await prisma.fixedExpense.update({ where: { id }, data: { name, value, category, dueDay } });
+  await prisma.fixedExpense.update({ where: { id }, data: { name, value, category, dueDay, period: isRecurring ? null : period, isRecurring } });
   revalidateBudgetPaths();
 }
 

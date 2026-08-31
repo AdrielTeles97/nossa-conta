@@ -16,14 +16,16 @@ import {
 } from '@/components/ui/dialog';
 import { Plus, Pencil } from 'lucide-react';
 
-type Data = { id: string; name: string; value: any; category: string; dueDay: number };
+type Data = { id: string; name: string; value: any; category: string; dueDay: number; period?: string | null; isRecurring?: boolean; createdAt?: string | Date };
 
-export function FixedExpenseModal({ expense }: { expense?: Data }) {
+export function FixedExpenseModal({ expense, currentPeriod }: { expense?: Data; currentPeriod?: string }) {
     const isEdit = !!expense;
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState("");
     const [category, setCategory] = useState(expense?.category || "Moradia");
     const [dueDay, setDueDay] = useState<string>(String(expense?.dueDay || new Date().getDate()));
+    const [isRecurring, setIsRecurring] = useState(expense?.isRecurring ?? true);
+    const [period, setPeriod] = useState(expense?.period || currentPeriod || new Date().toISOString().slice(0, 7));
 
     const fmtCurrency = (v: any) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -33,13 +35,17 @@ export function FixedExpenseModal({ expense }: { expense?: Data }) {
                 setValue(fmtCurrency(expense.value));
                 setCategory(expense.category);
                 setDueDay(String(expense.dueDay));
+                setIsRecurring(expense.isRecurring ?? true);
+                setPeriod(expense.period || currentPeriod || new Date().toISOString().slice(0, 7));
             } else {
                 setValue("");
                 setCategory("Moradia");
                 setDueDay(String(new Date().getDate()));
+                setIsRecurring(true);
+                setPeriod(currentPeriod || new Date().toISOString().slice(0, 7));
             }
         }
-    }, [open, isEdit, expense]);
+    }, [open, isEdit, expense, currentPeriod]);
 
     async function clientAction(formData: FormData) {
         if (isEdit) await updateFixedExpense(formData);
@@ -67,6 +73,8 @@ export function FixedExpenseModal({ expense }: { expense?: Data }) {
 
                     <form action={clientAction} className="space-y-4 mt-2">
                         {isEdit && <input type="hidden" name="id" value={expense!.id} />}
+                        <input type="hidden" name="isRecurring" value={isRecurring ? "true" : "false"} />
+                        {!isRecurring && <input type="hidden" name="period" value={period} />}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="dueDay">Dia do Vencimento</Label>
@@ -85,6 +93,20 @@ export function FixedExpenseModal({ expense }: { expense?: Data }) {
                             <Label>Categoria</Label>
                             <CategorySelect type="fixed" name="category" value={category} onChange={setCategory} required />
                         </div>
+                        <label className="flex items-center gap-2 p-3 rounded-lg border bg-white cursor-pointer">
+                            <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#1F6F5C]" />
+                            <div>
+                                <div className="text-sm font-semibold">Recorrente todo mês</div>
+                                <div className="text-xs text-[#8A8D82]">Desmarque para lançar só em um mês futuro (ex: março)</div>
+                            </div>
+                        </label>
+                        {!isRecurring && (
+                            <div className="space-y-2">
+                                <Label>Mês de competência</Label>
+                                <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} required className="bg-white" />
+                                <p className="text-[11px] text-[#8A8D82]">Será exibida só em {period} — ideal para despesa futura lançada em agosto para março.</p>
+                            </div>
+                        )}
                         <DialogFooter className="mt-6">
                             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                                 Cancelar

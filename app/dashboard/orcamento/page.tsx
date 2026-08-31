@@ -12,7 +12,8 @@ import { InvestPlanModal } from "@/app/dashboard/_components/modals/InvestPlanMo
 import { BudgetChart } from "@/app/dashboard/_components/modals/BudgetChart";
 import { HouseholdShareCard } from "@/app/dashboard/_components/HouseholdShareCard";
 import { CategoryManager } from "@/components/ui/category-manager";
-import { Eye, Trash2, Filter, Clock, CheckCircle2, Circle, Link2, Calendar, Wallet } from "lucide-react";
+import { OrcamentoFilter } from "@/components/ui/orcamento-filter";
+import { Eye, Trash2, Clock, CheckCircle2, Circle, Link2, Calendar } from "lucide-react";
 import Link from "next/link";
 import { MonthPicker } from "@/components/ui/month-picker";
 import { CashBalanceCard } from "@/components/ui/cash-balance-card";
@@ -20,7 +21,7 @@ import { CashBalanceCard } from "@/components/ui/cash-balance-card";
 export default async function BudgetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; period?: string }>;
+  searchParams: Promise<{ tab?: string; period?: string; category?: string }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
   const userId = session?.user?.id;
@@ -28,13 +29,15 @@ export default async function BudgetPage({
   const params = await searchParams;
   const currentTab = params.tab || "receita";
   const period = params.period || new Date().toISOString().slice(0, 7);
+  const categoryFilter = params.category || "";
   const [py, pm] = period.split("-").map(Number);
   const start = new Date(py, pm - 1, 1);
   const end = new Date(py, pm, 1);
   const monthLabel = start.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const monthShort = start.toLocaleDateString("pt-BR", { month: "long" });
-  // link helper para preservar periodo ao trocar aba
-  const tabHref = (tab: string) => `?tab=${tab}&period=${period}`;
+  // link helper para preservar periodo e filtro ao trocar aba
+  const tabHref = (tab: string) => `?tab=${tab}&period=${period}${categoryFilter ? `&category=${categoryFilter}` : ""}`;
+  const filterHref = (cat: string) => `?tab=${currentTab}&period=${period}${cat ? `&category=${cat}` : ""}`;
 
   // Escopo por household (casal compartilha dados)
   let householdId: string | null = null;
@@ -46,20 +49,44 @@ export default async function BudgetPage({
 
   const user = userId ? await prisma.user.findUnique({ where: { id: userId } }) : null;
   const baseWhere = householdId ? { householdId } : userId ? { userId } : null;
-  // Fixas são recorrentes: aparecem todo mês automaticamente (não filtra por período)
+  const categoryWhere = categoryFilter ? { category: categoryFilter } : {};
+  // Fixas: recorrentes aparecem todo mês; pontuais só no seu period
+  const fixedWhere = baseWhere
+    ? {
+        ...baseWhere,
+        ...categoryWhere,
+        OR: [{ isRecurring: true }, { period }, { period: null }, { AND: [{ period }, { period: period }] }],
+      }
+    : null;
+  // Na prática filtra no JS para manter isRecurring/period lógico simples
+  const allFixed = baseWhere ? await prisma.fixedExpense.findMany({ where: baseWhere, orderBy: [{ isRecurring: "desc" }, { dueDay: "asc" }], include: { user: { select: { name: true } }, linkedDebt: { select: { id: true, name: true } } } }) : [];
+  const fixedExpenses = allFixed.filter((f: any) => {
+    if (categoryFilter && f.category !== categoryFilter) return false;
+    if (f.isRecurring) return true;
+    if (!f.period) return true; // legado sem period => recorrente
+    return f.period === period;
+  });
+  // Fixas são recorrentes: aparecem todo mês automaticamente (não filtra por período) - já filtrado acima
   // Receitas: se isRecurring=true aparece todo mês, senão filtra por período
-  const incomes = baseWhere
+  const incomesRaw = baseWhere
     ? await prisma.income.findMany({
         where: {
           ...baseWhere,
+          ...(categoryFilter && currentTab === "receita" ? { category: categoryFilter } : {}),
           OR: [{ isRecurring: true }, { createdAt: { gte: start, lt: end } }],
         },
         orderBy: { createdAt: "desc" },
         include: { user: { select: { name: true, email: true } } },
       })
     : [];
-  const variableExpenses = baseWhere ? await prisma.variableExpense.findMany({ where: { ...baseWhere, date: { gte: start, lt: end } }, orderBy: { date: "desc" }, include: { user: { select: { name: true } } } }) : [];
-  const fixedExpenses = baseWhere ? await prisma.fixedExpense.findMany({ where: baseWhere, orderBy: { dueDay: "asc" }, include: { user: { select: { name: true } }, linkedDebt: { select: { id: true, name: true } } } }) : [];
+  const incomes = incomesRaw;
+  const variableExpenses = baseWhere
+    ? await prisma.variableExpense.findMany({
+        where: { ...baseWhere, ...(categoryFilter && currentTab === "variavel" ? { category: categoryFilter } : {}), date: { gte: start, lt: end } },
+        orderBy: { date: "desc" },
+        include: { user: { select: { name: true } } },
+      })
+    : [];
 
   // Caixa inicial = saldo livre do mês anterior (editável)
   let cashInitial = 0;
@@ -89,13 +116,21 @@ export default async function BudgetPage({
     }
   }
 
-  // Matemática dos Cards (com caixa)
+  // Matemática dos Cards (com caixa) — fixas só contam quando pagas (toggle)
   const totalIncomeRaw = incomes.reduce((acc, curr) => acc + Number(curr.value), 0);
   const totalIncomeAvailable = totalIncomeRaw + cashInitial;
   const totalVariables = variableExpenses.reduce((acc, curr) => acc + Number(curr.value), 0);
-  const totalFixed = fixedExpenses.reduce((acc, curr) => acc + Number(curr.value), 0);
+  // só fixas pagas viram despesa no mês (indica valor saiu do saldo)
+  const totalFixed = fixedExpenses.filter((f: any) => f.paid).reduce((acc, curr) => acc + Number(curr.value), 0);
+  // para cards, usa total de fixas pagas; para histórico total sem filtro de categoria, já está correto
+  // mas se houver filtro de categoria, cards devem ignorar filtro — então recalcula sem filtro de categoria para cards
+  const totalFixedForCard = allFixed.filter((f: any) => {
+    if (f.isRecurring) return f.paid;
+    if (!f.period) return f.paid;
+    return f.period === period && f.paid;
+  }).reduce((acc: number, curr: any) => acc + Number(curr.value), 0);
   
-  const totalExpenses = totalVariables + totalFixed;
+  const totalExpenses = totalVariables + totalFixedForCard;
   const investTargetPct = user?.investmentTargetPct || 0;
   const investAmount = totalIncomeRaw * (investTargetPct / 100);
   const balance = totalIncomeAvailable - totalExpenses - investAmount;
@@ -201,13 +236,11 @@ export default async function BudgetPage({
             </h3>
             <div className="flex items-center gap-2">
               <CategoryManager />
-              <button className="flex items-center gap-2 text-xs font-semibold text-[#4A5160] px-3 py-2 bg-white border border-[#D9D6C9] rounded-lg hover:bg-gray-50 transition-colors">
-                <Filter size={14} /> Filtro
-              </button>
+              <OrcamentoFilter currentTab={currentTab} />
               
               {/* O Modal se adapta à aba atual */}
               {currentTab === "receita" && <IncomeModal />}
-              {currentTab === "fixa" && <FixedExpenseModal />}
+              {currentTab === "fixa" && <FixedExpenseModal currentPeriod={period} />}
               {currentTab === "variavel" && <VariableExpenseModal />}
             </div>
           </div>
@@ -291,18 +324,23 @@ export default async function BudgetPage({
                       <tr key={expense.id} className={`hover:bg-gray-50 transition-colors ${expense.paid ? 'opacity-60' : ''} ${isLinked ? 'bg-blue-50/40' : ''}`}>
                         <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-center`}>
                           <form action={async () => { "use server"; await toggleFixedExpense(expense.id, expense.paid); }}>
-                            <button type="submit" className={`p-1 ${expense.paid ? 'text-[#1F6F5C]' : 'text-[#8A8D82]'}`}>
+                            <button type="submit" className={`p-1 ${expense.paid ? 'text-[#1F6F5C]' : 'text-[#8A8D82]'}`} title={expense.paid ? "Marcar como não pago" : "Marcar como pago - vira despesa no mês"}>
                               {expense.paid ? <CheckCircle2 size={isLinked ? 16 : 18} /> : <Circle size={isLinked ? 16 : 18} />}
                             </button>
                           </form>
                         </td>
                         <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-[#8A8D82] text-xs`}>Dia {expense.dueDay}</td>
                         <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} font-semibold text-[#1B2430] ${expense.paid ? 'line-through' : ''} ${isLinked ? 'text-xs' : 'text-sm'}`}>
-                          <div className="flex items-center gap-1.5">
-                            {isLinked && <Link2 size={12} className="text-blue-500 flex-shrink-0" />}
-                            <span className="truncate max-w-[140px]">{expense.name}</span>
-                            {isLinked && expense.linkedDebt && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full truncate max-w-[80px]">{expense.linkedDebt.name}</span>}
-                            <span className="text-[10px] font-medium bg-[#F1F0EA] text-[#6B7280] px-1 py-0.5 rounded-full border border-[#E8E6DD] hidden sm:inline">{(expense.user?.name || '—').split(' ')[0]}</span>
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5">
+                              {isLinked && <Link2 size={12} className="text-blue-500 flex-shrink-0" />}
+                              <span className="truncate max-w-[140px]">{expense.name}</span>
+                              {isLinked && expense.linkedDebt && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full truncate max-w-[80px]">{expense.linkedDebt.name}</span>}
+                              {!expense.isRecurring && expense.period && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">📅 {expense.period}</span>}
+                              {expense.isRecurring && <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-1 py-0.5 rounded-full">↻</span>}
+                              <span className="text-[10px] font-medium bg-[#F1F0EA] text-[#6B7280] px-1 py-0.5 rounded-full border border-[#E8E6DD] hidden sm:inline">{(expense.user?.name || '—').split(' ')[0]}</span>
+                            </div>
+                            <span className="text-[10px] text-[#8A8D82] font-normal">Lançado em {new Date(expense.createdAt).toLocaleDateString('pt-BR')} {expense.paid ? '• pago' : '• pendente'}</span>
                           </div>
                         </td>
                         <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'}`}>
@@ -313,7 +351,7 @@ export default async function BudgetPage({
                         <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} font-bold text-[#B23B3B] text-right ${isLinked ? 'text-xs' : 'text-sm'}`}>{fmt(expense.value)}</td>
                         <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-center`}>
                           <div className="flex items-center justify-center gap-0.5">
-                            <FixedExpenseModal expense={expense} />
+                            <FixedExpenseModal expense={expense} currentPeriod={period} />
                             <form action={async () => { "use server"; await deleteFixedExpense(expense.id); }}>
                               <button type="submit" className="text-[#8A8D82] hover:text-[#B23B3B] transition-colors p-0.5" title="Excluir">
                                 <Trash2 size={14} />

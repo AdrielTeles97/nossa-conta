@@ -214,6 +214,8 @@ model FixedExpense {
   category     String
   dueDay       Int
   paid         Boolean  @default(false)
+  period       String?  // YYYY-MM quando não recorrente (ex: despesa de março lançada em agosto)
+  isRecurring  Boolean  @default(true)
   
   linkedDebtId String?
   linkedDebt   Debt?    @relation(fields: [linkedDebtId], references: [id], onDelete: SetNull)
@@ -221,7 +223,11 @@ model FixedExpense {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   household    Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
   @@index([householdId])
+  @@index([period])
 }
 
 model CashBalance {

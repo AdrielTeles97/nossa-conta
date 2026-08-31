@@ -68,10 +68,16 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
           cashInitial = prevBal > 0 ? prevBal : 0;
         }
 
-        const totalIncomeRaw = incomes.reduce((acc, curr) => acc + Number(curr.value), 0);
+        const totalIncomeRaw = incomes.reduce((acc: number, curr: any) => acc + Number(curr.value), 0);
         totalIncome = totalIncomeRaw;
-        const totalVariables = variableExpenses.reduce((acc, curr) => acc + Number(curr.value), 0);
-        const totalFixed = fixedExpenses.reduce((acc, curr) => acc + Number(curr.value), 0);
+        const filteredForPeriod = fixedExpenses.filter((f: any) => {
+          if (f.isRecurring) return true;
+          if (!f.period) return true;
+          return f.period === period;
+        });
+        const totalVariables = variableExpenses.reduce((acc: number, curr: any) => acc + Number(curr.value), 0);
+        const totalFixedAll = filteredForPeriod.reduce((acc: number, curr: any) => acc + Number(curr.value), 0);
+        const totalFixed = filteredForPeriod.filter((f: any) => f.paid).reduce((acc: number, curr: any) => acc + Number(curr.value), 0);
         totalExpenses = totalVariables + totalFixed;
 
         const pct = user?.investmentTargetPct ?? 0;
