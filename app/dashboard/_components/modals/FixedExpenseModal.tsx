@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { CategorySelect } from '@/components/ui/category-select';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import {
     Dialog,
     DialogContent,
@@ -103,8 +104,8 @@ export function FixedExpenseModal({ expense, currentPeriod }: { expense?: Data; 
                         {!isRecurring && (
                             <div className="space-y-2">
                                 <Label>Mês de competência</Label>
-                                <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} required className="bg-white" />
-                                <p className="text-[11px] text-[#8A8D82]">Será exibida só em {period} — ideal para despesa futura lançada em agosto para março.</p>
+                                <MonthYearPicker value={period} onChange={setPeriod} />
+                                <p className="text-[11px] text-[#8A8D82]">Será exibida só em <span className="capitalize font-semibold">{period ? new Date(parseInt(period.split('-')[0]), parseInt(period.split('-')[1])-1, 1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) : period}</span> — ideal para despesa futura lançada em agosto para março.</p>
                             </div>
                         )}
                         <DialogFooter className="mt-6">
