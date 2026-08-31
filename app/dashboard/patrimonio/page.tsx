@@ -5,7 +5,8 @@ import { getOrCreateHouseholdForUser } from "@/lib/household";
 import { Card, CardContent } from "@/components/ui/card";
 import { AssetModal } from "@/app/dashboard/_components/modals/AssetModal";
 import { DebtModal } from "@/app/dashboard/_components/modals/DebtModal";
-import { deleteAsset, deleteDebt, payDebtInstallment } from "@/app/actions/patrimonio";
+import { PayDebtModal } from "@/app/dashboard/_components/modals/PayDebtModal";
+import { deleteAsset, deleteDebt } from "@/app/actions/patrimonio";
 import { Trash2 } from "lucide-react";
 
 export default async function PatrimonioPage() {
@@ -19,7 +20,7 @@ export default async function PatrimonioPage() {
     const h = await getOrCreateHouseholdForUser(userId);
     const [a, d, inv, cashRows] = await Promise.all([
       prisma.asset.findMany({ where: { householdId: h.id }, include: { debts: true, user: { select: { name: true } } } }),
-      prisma.debt.findMany({ where: { householdId: h.id }, include: { asset: true, fixedExpenses: true, user: { select: { name: true } } } }),
+      prisma.debt.findMany({ where: { householdId: h.id }, include: { asset: true, fixedExpenses: true, user: { select: { name: true } }, payments: { orderBy: { paidAt: "desc" }, take: 5, include: { user: { select: { name: true } } } } } }),
       prisma.investment.findMany({ where: { householdId: h.id } }),
       prisma.cashBalance.findMany({ where: { householdId: h.id } }),
     ]);
@@ -191,16 +192,29 @@ export default async function PatrimonioPage() {
                 const paid = d.paidInstallments ?? 0;
                 const due = d.dueDay || d.fixedExpenses[0]?.dueDay || 10;
                 return (
-                  <div key={d.id} className="border rounded-lg p-3 flex justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-xs">{d.name} {d.asset && <span className="text-[10px] bg-blue-50 text-blue-700 px-1 py-0.5 rounded-full">{d.asset.name}</span>}</div>
-                      <div className="text-[11px] text-[#8A8D82]">{fmt(Number(d.balance))} • {fmt(Number(d.installment))}/mês • {paid}/{total} • dia {due}</div>
+                  <div key={d.id} className="border rounded-lg p-3">
+                    <div className="flex justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-xs">{d.name} {d.asset && <span className="text-[10px] bg-blue-50 text-blue-700 px-1 py-0.5 rounded-full">{d.asset.name}</span>}</div>
+                        <div className="text-[11px] text-[#8A8D82]">Faltam {fmt(Number(d.balance))} • {fmt(Number(d.installment))}/mês • {paid}/{total} • vence dia {due}</div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <DebtModal debt={d} />
+                        <PayDebtModal debt={d} />
+                        <form action={async () => { "use server"; await deleteDebt(d.id); }}><button className="text-[11px] text-[#B23B3B] px-1">Excluir</button></form>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <DebtModal debt={d} />
-                      <form action={async () => { "use server"; await payDebtInstallment(d.id); }}><button className="text-[11px] bg-[#1F6F5C] text-white px-2 py-1 rounded-md">Pagar</button></form>
-                      <form action={async () => { "use server"; await deleteDebt(d.id); }}><button className="text-[11px] text-[#B23B3B] px-1">Excluir</button></form>
-                    </div>
+                    {d.payments && d.payments.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-dashed space-y-1">
+                        <div className="text-[10px] font-semibold text-[#8A8D82] uppercase tracking-widest">Últimos pagamentos</div>
+                        {d.payments.map((p: any) => (
+                          <div key={p.id} className="flex justify-between text-[11px] bg-[#F9F9F7] px-2 py-1 rounded-md">
+                            <span>Comp. <b className="capitalize">{new Date(p.competence + "-02").toLocaleDateString("pt-BR", { month: "short", year: "numeric" })}</b> • pago em {new Date(p.paidAt).toLocaleDateString("pt-BR")} • {p.user?.name}</span>
+                            <span className="font-mono font-semibold">{fmt(Number(p.amount))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}

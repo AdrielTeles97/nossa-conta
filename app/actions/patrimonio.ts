@@ -137,15 +137,57 @@ export async function deleteDebt(id: string) {
   revalidatePath('/dashboard/orcamento');
 }
 
-export async function payDebtInstallment(debtId: string) {
+export async function payDebtInstallment(formData: FormData | string) {
+  const isForm = typeof formData !== "string";
+  const debtId = isForm ? ((formData as FormData).get("debtId") as string) || ((formData as FormData).get("id") as string) : (formData as string);
+  const competence = isForm ? ((formData as FormData).get("competence") as string) : null;
+  const paidAtStr = isForm ? ((formData as FormData).get("paidAt") as string) : null;
+  const amountRaw = isForm ? ((formData as FormData).get("amount") as string) : null;
+
   const debt = await prisma.debt.findUnique({ where: { id: debtId } });
   if (!debt) return;
-  const newBal = Number(debt.balance) - Number(debt.installment);
-  const newPaid = (debt as any).paidInstallments + 1;
-  await prisma.debt.update({
-    where: { id: debtId },
-    data: { balance: newBal < 0 ? 0 : newBal, paidInstallments: newPaid, totalInstallments: (debt as any).totalInstallments || 0 },
-  });
+
+  const session = await auth.api.getSession({ headers: await headers() });
+  const household = debt.householdId ? { id: debt.householdId } : session ? await getOrCreateHouseholdForUser(session.user.id) : null;
+  const householdId = (debt as any).householdId || household?.id;
+  const userId = (debt as any).userId || session?.user.id;
+
+  const amount = amountRaw ? parseCurrency(amountRaw) : Number(debt.installment);
+  const paidAt = paidAtStr ? new Date(paidAtStr) : new Date();
+  // competence padrão: próximo vencimento (mês atual se dia <= dueDay senão próximo mês)
+  let comp = competence;
+  if (!comp) {
+    const now = new Date();
+    const dueDay = (debt as any).dueDay || 10;
+    const curMonth = now.getDate() <= dueDay ? now : new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    comp = `${curMonth.getFullYear()}-${String(curMonth.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  const newBal = Number(debt.balance) - amount;
+  const newPaid = ((debt as any).paidInstallments || 0) + 1;
+
+  // evita duplicar competência
+  const existing = await prisma.debtPayment.findUnique({ where: { debtId_competence: { debtId, competence: comp } } }).catch(() => null);
+  if (existing) return { error: "Parcela desta competência já paga" };
+
+  await prisma.$transaction([
+    prisma.debt.update({
+      where: { id: debtId },
+      data: { balance: newBal < 0 ? 0 : newBal, paidInstallments: newPaid },
+    }),
+    prisma.debtPayment.create({
+      data: {
+        debtId,
+        householdId: householdId!,
+        userId: userId!,
+        competence: comp,
+        paidAt,
+        amount,
+      },
+    }),
+  ]);
+
   revalidatePath('/dashboard/patrimonio');
+  revalidatePath('/dashboard/orcamento');
   revalidatePath('/dashboard');
 }
