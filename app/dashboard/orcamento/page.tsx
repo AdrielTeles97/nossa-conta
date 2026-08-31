@@ -60,6 +60,13 @@ export default async function BudgetPage({
     : null;
   // Na prática filtra no JS para manter isRecurring/period lógico simples
   const allFixed = baseWhere ? await prisma.fixedExpense.findMany({ where: baseWhere, orderBy: [{ isRecurring: "desc" }, { dueDay: "asc" }], include: { user: { select: { name: true } }, linkedDebt: { select: { id: true, name: true } } } }) : [];
+  const debtPaymentsForPeriod = householdId ? await prisma.debtPayment.findMany({ where: { householdId, competence: period } }) : [];
+  const isFixedPaidForPeriod = (f: any) => {
+    if (f.linkedDebtId) {
+      return debtPaymentsForPeriod.some((p) => p.debtId === f.linkedDebtId);
+    }
+    return f.paid;
+  };
   const fixedExpenses = allFixed.filter((f: any) => {
     if (categoryFilter && f.category !== categoryFilter) return false;
     if (f.isRecurring) return true;
@@ -320,17 +327,20 @@ export default async function BudgetPage({
                     )}
                   {fixedExpenses.map((expense: any) => {
                     const isLinked = !!expense.linkedDebtId;
+                    const isPaid = isFixedPaidForPeriod(expense);
                     return (
-                      <tr key={expense.id} className={`hover:bg-gray-50 transition-colors ${expense.paid ? 'opacity-60' : ''} ${isLinked ? 'bg-blue-50/40' : ''}`}>
+                      <tr key={expense.id} className={`hover:bg-gray-50 transition-colors ${isPaid ? 'opacity-60' : ''} ${isLinked ? 'bg-blue-50/40' : ''}`}>
                         <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-center`}>
-                          <form action={async () => { "use server"; await toggleFixedExpense(expense.id, expense.paid); }}>
-                            <button type="submit" className={`p-1 ${expense.paid ? 'text-[#1F6F5C]' : 'text-[#8A8D82]'}`} title={expense.paid ? "Marcar como não pago" : "Marcar como pago - vira despesa no mês"}>
-                              {expense.paid ? <CheckCircle2 size={isLinked ? 16 : 18} /> : <Circle size={isLinked ? 16 : 18} />}
+                          <form action={toggleFixedExpense}>
+                            <input type="hidden" name="id" value={expense.id} />
+                            <input type="hidden" name="period" value={period} />
+                            <button type="submit" className={`p-1 ${isPaid ? 'text-[#1F6F5C]' : 'text-[#8A8D82]'}`} title={isPaid ? "Marcar como não pago" : "Marcar como pago - vira despesa no mês"}>
+                              {isPaid ? <CheckCircle2 size={isLinked ? 16 : 18} /> : <Circle size={isLinked ? 16 : 18} />}
                             </button>
                           </form>
                         </td>
                         <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-[#8A8D82] text-xs`}>Dia {expense.dueDay}</td>
-                        <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} font-semibold text-[#1B2430] ${expense.paid ? 'line-through' : ''} ${isLinked ? 'text-xs' : 'text-sm'}`}>
+                        <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} font-semibold text-[#1B2430] ${isPaid ? 'line-through' : ''} ${isLinked ? 'text-xs' : 'text-sm'}`}>
                           <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-1.5">
                               {isLinked && <Link2 size={12} className="text-blue-500 flex-shrink-0" />}
@@ -340,7 +350,7 @@ export default async function BudgetPage({
                               {expense.isRecurring && <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-1 py-0.5 rounded-full">↻</span>}
                               <span className="text-[10px] font-medium bg-[#F1F0EA] text-[#6B7280] px-1 py-0.5 rounded-full border border-[#E8E6DD] hidden sm:inline">{(expense.user?.name || '—').split(' ')[0]}</span>
                             </div>
-                            <span className="text-[10px] text-[#8A8D82] font-normal">Lançado em {new Date(expense.createdAt).toLocaleDateString('pt-BR')} {expense.paid ? '• pago' : '• pendente'}</span>
+                            <span className="text-[10px] text-[#8A8D82] font-normal">Lançado em {new Date(expense.createdAt).toLocaleDateString('pt-BR')} {isPaid ? '• pago' : '• pendente'}</span>
                           </div>
                         </td>
                         <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'}`}>

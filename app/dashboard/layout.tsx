@@ -1,5 +1,5 @@
 // src/app/dashboard/layout.tsx
-import { Wallet, Landmark, Home, PiggyBank, Settings } from "lucide-react";
+import { Wallet, Landmark, Home, PiggyBank, Settings, Hammer } from "lucide-react";
 import Link from "next/link";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileNav } from "./_components/MobileNav";
@@ -11,6 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: "Gastos Mensais", path: "/dashboard/orcamento", icon: Landmark },
     { name: "Patrimônio", path: "/dashboard/patrimonio", icon: Home },
     { name: "Investimentos", path: "/dashboard/investimentos", icon: PiggyBank },
+    { name: "Simulação Obra", path: "/dashboard/simulacao", icon: Hammer },
     { name: "Configurações", path: "/dashboard/configuracoes", icon: Settings },
   ];
 

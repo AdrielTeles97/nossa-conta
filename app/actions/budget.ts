@@ -175,10 +175,45 @@ export async function deleteFixedExpense(id: string) {
   revalidateBudgetPaths();
 }
 
-export async function toggleFixedExpense(id: string, currentStatus: boolean) {
-  await prisma.fixedExpense.update({
-    where: { id },
-    data: { paid: !currentStatus }
-  });
+export async function toggleFixedExpense(formData: FormData) {
+  const id = formData.get("id") as string;
+  const period = (formData.get("period") as string) || new Date().toISOString().slice(0, 7);
+  const fixed = await prisma.fixedExpense.findUnique({ where: { id } });
+  if (!fixed) return;
+
+  // Se vinculada a dívida (parcela), controla via DebtPayment por competência
+  if (fixed.linkedDebtId) {
+    const debt = await prisma.debt.findUnique({ where: { id: fixed.linkedDebtId } });
+    if (!debt) {
+      await prisma.fixedExpense.update({ where: { id }, data: { paid: !fixed.paid } });
+      revalidateBudgetPaths();
+      return;
+    }
+    const session = await auth.api.getSession({ headers: await headers() });
+    const householdId = fixed.householdId || (session ? (await getOrCreateHouseholdForUser(session.user.id)).id : null);
+    const userId = fixed.userId;
+    const existing = await prisma.debtPayment.findUnique({ where: { debtId_competence: { debtId: debt.id, competence: period } } }).catch(() => null);
+
+    if (existing) {
+      // desmarcar: remove pagamento e estorna saldo
+      await prisma.$transaction([
+        prisma.debt.update({ where: { id: debt.id }, data: { balance: Number(debt.balance) + Number(existing.amount), paidInstallments: { decrement: 1 } } }),
+        prisma.debtPayment.delete({ where: { id: existing.id } }),
+        prisma.fixedExpense.update({ where: { id }, data: { paid: false } }),
+      ]);
+    } else {
+      // marcar como pago: cria pagamento e debita
+      const amount = Number(fixed.value);
+      const newBal = Math.max(0, Number(debt.balance) - amount);
+      await prisma.$transaction([
+        prisma.debt.update({ where: { id: debt.id }, data: { balance: newBal, paidInstallments: { increment: 1 } } }),
+        prisma.debtPayment.create({ data: { debtId: debt.id, householdId: householdId!, userId, competence: period, amount, paidAt: new Date() } }),
+        prisma.fixedExpense.update({ where: { id }, data: { paid: true } }),
+      ]);
+    }
+  } else {
+    await prisma.fixedExpense.update({ where: { id }, data: { paid: !fixed.paid } });
+  }
   revalidateBudgetPaths();
+  revalidatePath(`/dashboard/patrimonio`);
 }
