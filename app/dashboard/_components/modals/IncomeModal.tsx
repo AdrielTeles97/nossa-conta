@@ -28,6 +28,7 @@ type IncomeData = {
 };
 
 type FixedOpt = { id: string; name: string; value: any; dueDay: number };
+type VarOpt = { id: string; name: string; value: any; category: string };
 
 export function IncomeModal({ income }: { income?: IncomeData }) {
   const isEdit = !!income;
@@ -38,6 +39,7 @@ export function IncomeModal({ income }: { income?: IncomeData }) {
   const [isRecurring, setIsRecurring] = useState(income?.isRecurring || false);
   const [payDay, setPayDay] = useState<string>(String(income?.payDay || ""));
   const [fixedOpts, setFixedOpts] = useState<FixedOpt[]>([]);
+  const [varOpts, setVarOpts] = useState<VarOpt[]>([]);
   const [alloc, setAlloc] = useState<Record<string, string>>({});
 
   const fmtCurrency = (v: any) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -50,18 +52,29 @@ export function IncomeModal({ income }: { income?: IncomeData }) {
 
   useEffect(() => {
     if (open) {
-      // busca fixas para vincular
-      fetch("/api/fixed-for-alloc").then((r) => r.json()).then((d) => setFixedOpts(d || [])).catch(() => setFixedOpts([]));
+      // busca fixas e variáveis para vincular
+      fetch("/api/fixed-for-alloc").then((r) => r.json()).then((d) => {
+        if (Array.isArray(d)) {
+          setFixedOpts(d || []);
+          setVarOpts([]);
+        } else {
+          setFixedOpts(d.fixed || []);
+          setVarOpts(d.variable || []);
+        }
+      }).catch(() => { setFixedOpts([]); setVarOpts([]); });
       if (isEdit && income) {
         setDate(income.createdAt ? new Date(income.createdAt) : new Date());
         setValue(fmtCurrency(income.value));
         setCategory(income.category || "Geral");
         setIsRecurring(!!income.isRecurring);
         setPayDay(income.payDay ? String(income.payDay) : "");
-        // carrega alocações existentes
+        // carrega alocações existentes (fixas e variáveis)
         fetch(`/api/alloc?incomeId=${income.id}`).then((r) => r.json()).then((d) => {
           const m: Record<string, string> = {};
-          (d || []).forEach((a: any) => { m[a.fixedExpenseId] = fmtCurrency(a.amount); });
+          (d || []).forEach((a: any) => {
+            if (a.fixedExpenseId) m[`fixed_${a.fixedExpenseId}`] = fmtCurrency(a.amount);
+            if (a.variableExpenseId) m[`var_${a.variableExpenseId}`] = fmtCurrency(a.amount);
+          });
           setAlloc(m);
         }).catch(() => {});
       } else {
@@ -79,9 +92,9 @@ export function IncomeModal({ income }: { income?: IncomeData }) {
   const sobra = parseBRL(value) - totalAlocado;
 
   async function clientAction(formData: FormData) {
-    // adiciona alocações ao formData
-    Object.entries(alloc).forEach(([fid, val]) => {
-      if (parseBRL(val) > 0) formData.set(`alloc_${fid}`, val);
+    // adiciona alocações ao formData (chaves já com prefixo fixed_/var_)
+    Object.entries(alloc).forEach(([key, val]) => {
+      if (parseBRL(val) > 0) formData.set(`alloc_${key}`, val);
     });
     if (isEdit) await updateIncome(formData);
     else await addIncome(formData);
@@ -144,35 +157,65 @@ export function IncomeModal({ income }: { income?: IncomeData }) {
               </div>
             </label>
 
-            <div className="border rounded-xl bg-white p-3 space-y-2">
+            <div className="border rounded-xl bg-white p-3 space-y-3">
               <div className="flex justify-between items-center">
                 <Label className="font-semibold">O que paga com este salário?</Label>
                 <span className={`text-xs font-mono px-2 py-1 rounded-full ${sobra >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>Sobra {fmt(sobra)}</span>
               </div>
-              <p className="text-[11px] text-[#8A8D82]">Marque as despesas que saem deste recebimento (ex: moto e pessoal no salário do dia 30). Valor já vem preenchido, pode ajustar.</p>
-              <div className="max-h-[180px] overflow-auto divide-y border rounded-lg">
-                {fixedOpts.length === 0 && <p className="text-xs text-[#8A8D82] p-3">Nenhuma despesa fixa cadastrada. Crie em Gastos Mensais primeiro.</p>}
-                {fixedOpts.map((f) => (
-                  <label key={f.id} className="flex items-center gap-2 p-2.5 hover:bg-[#F9F9F7] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={alloc[f.id] !== undefined}
-                      onChange={(e) => {
-                        if (e.target.checked) setAlloc((prev) => ({ ...prev, [f.id]: fmt(f.value) }));
-                        else setAlloc((prev) => { const n = { ...prev }; delete n[f.id]; return n; });
-                      }}
-                      className="h-4 w-4 rounded border-gray-300 text-[#1F6F5C]"
-                    />
-                    <span className="flex-1 text-xs font-medium">{f.name} <span className="text-[#8A8D82]">• Dia {f.dueDay}</span></span>
-                    <CurrencyInput
-                      value={alloc[f.id] || ""}
-                      onValueChange={(v) => setAlloc((prev) => ({ ...prev, [f.id]: v }))}
-                      placeholder={fmt(f.value)}
-                      className="h-8 w-28 bg-white text-xs"
-                      disabled={alloc[f.id] === undefined}
-                    />
-                  </label>
-                ))}
+              <p className="text-[11px] text-[#8A8D82]">Marque fixas e variáveis que saem deste recebimento. Valor vem preenchido, pode ajustar (ex: moto, gasolina, pessoal).</p>
+              <div>
+                <div className="text-[11px] font-bold text-[#1F6F5C] mb-1">Despesas fixas</div>
+                <div className="max-h-[140px] overflow-auto divide-y border rounded-lg">
+                  {fixedOpts.length === 0 && <p className="text-xs text-[#8A8D82] p-3">Nenhuma fixa. Crie em Gastos Mensais.</p>}
+                  {fixedOpts.map((f) => (
+                    <label key={`fixed_${f.id}`} className="flex items-center gap-2 p-2 hover:bg-[#F9F9F7] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={alloc[`fixed_${f.id}`] !== undefined}
+                        onChange={(e) => {
+                          if (e.target.checked) setAlloc((prev) => ({ ...prev, [`fixed_${f.id}`]: fmt(f.value) }));
+                          else setAlloc((prev) => { const n = { ...prev }; delete n[`fixed_${f.id}`]; return n; });
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-[#1F6F5C]"
+                      />
+                      <span className="flex-1 text-xs font-medium">{f.name} <span className="text-[#8A8D82]">• Dia {f.dueDay}</span></span>
+                      <CurrencyInput
+                        value={alloc[`fixed_${f.id}`] || ""}
+                        onValueChange={(v) => setAlloc((prev) => ({ ...prev, [`fixed_${f.id}`]: v }))}
+                        placeholder={fmt(f.value)}
+                        className="h-8 w-28 bg-white text-xs"
+                        disabled={alloc[`fixed_${f.id}`] === undefined}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-[#B23B3B] mb-1">Despesas variáveis</div>
+                <div className="max-h-[120px] overflow-auto divide-y border rounded-lg">
+                  {varOpts.length === 0 && <p className="text-xs text-[#8A8D82] p-3">Nenhuma variável recente. Crie em Gastos Mensais.</p>}
+                  {varOpts.map((v) => (
+                    <label key={`var_${v.id}`} className="flex items-center gap-2 p-2 hover:bg-[#F9F9F7] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={alloc[`var_${v.id}`] !== undefined}
+                        onChange={(e) => {
+                          if (e.target.checked) setAlloc((prev) => ({ ...prev, [`var_${v.id}`]: fmt(v.value) }));
+                          else setAlloc((prev) => { const n = { ...prev }; delete n[`var_${v.id}`]; return n; });
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-[#B23B3B]"
+                      />
+                      <span className="flex-1 text-xs font-medium">{v.name} <span className="text-[#8A8D82]">• {v.category}</span></span>
+                      <CurrencyInput
+                        value={alloc[`var_${v.id}`] || ""}
+                        onValueChange={(vv) => setAlloc((prev) => ({ ...prev, [`var_${v.id}`]: vv }))}
+                        placeholder={fmt(v.value)}
+                        className="h-8 w-28 bg-white text-xs"
+                        disabled={alloc[`var_${v.id}`] === undefined}
+                      />
+                    </label>
+                  ))}
+                </div>
               </div>
               <div className="text-[11px] text-[#8A8D82]">Total alocado: <b>{fmt(totalAlocado)}</b> • Sobra: <b className={sobra >= 0 ? "text-green-700" : "text-red-600"}>{fmt(sobra)}</b></div>
             </div>

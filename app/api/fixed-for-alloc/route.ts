@@ -7,6 +7,9 @@ export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return Response.json([], { status: 401 });
   const h = await getOrCreateHouseholdForUser(session.user.id);
-  const fixed = await prisma.fixedExpense.findMany({ where: { householdId: h.id }, orderBy: { dueDay: "asc" }, select: { id: true, name: true, value: true, dueDay: true } });
-  return Response.json(fixed);
+  const [fixed, variable] = await Promise.all([
+    prisma.fixedExpense.findMany({ where: { householdId: h.id }, orderBy: { dueDay: "asc" }, select: { id: true, name: true, value: true, dueDay: true } }),
+    prisma.variableExpense.findMany({ where: { householdId: h.id }, orderBy: { date: "desc" }, take: 30, select: { id: true, name: true, value: true, category: true } }),
+  ]);
+  return Response.json({ fixed, variable });
 }
