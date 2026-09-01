@@ -54,7 +54,7 @@ export async function addIncome(formData: FormData) {
 
     const data: any = { name, value, category, isRecurring, payDay, userId: user.id, householdId };
     if (dateStr) {
-      const d = new Date(dateStr);
+      const d = parseLocalDate(dateStr);
       if (!isNaN(d.getTime())) data.createdAt = d;
     }
 
@@ -99,7 +99,7 @@ export async function updateIncome(formData: FormData) {
     if (!id || !name || isNaN(value)) return;
     const data: any = { name, value, category, isRecurring, payDay };
     if (dateStr) {
-      const d = new Date(dateStr);
+      const d = parseLocalDate(dateStr);
       if (!isNaN(d.getTime())) data.createdAt = d;
     }
     await prisma.income.update({ where: { id }, data });
@@ -139,6 +139,11 @@ export async function deleteIncome(id: string) {
 
 // --- CRUD DESPESAS VARIÁVEIS ---
 
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0);
+}
+
 export async function addVariableExpense(formData: FormData) {
     const { user, householdId } = await getHouseholdScope();
     const name = formData.get('name') as string;
@@ -153,7 +158,7 @@ export async function addVariableExpense(formData: FormData) {
             name,
             value,
             category,
-            date: new Date(dateStr),
+            date: parseLocalDate(dateStr),
             userId: user.id,
             householdId,
         },
@@ -171,7 +176,7 @@ export async function updateVariableExpense(formData: FormData) {
     if (!id || !name || isNaN(value) || !category) return;
     const data: any = { name, value, category };
     if (dateStr) {
-      const d = new Date(dateStr);
+      const d = parseLocalDate(dateStr);
       if (!isNaN(d.getTime())) data.date = d;
     }
     await prisma.variableExpense.update({ where: { id }, data });
