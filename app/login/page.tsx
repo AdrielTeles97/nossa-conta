@@ -97,7 +97,6 @@ export default function LoginPage() {
             <Button type="submit" className="w-full bg-[#1F6F5C] hover:bg-[#154E41]" disabled={loading}>
               {loading ? "Entrando..." : "Entrar"}
             </Button>
-            <p className="text-xs text-center text-[#8A8D82]">Não tem conta? <a href="/setup" className="text-[#1F6F5C] underline">Criar conta</a></p>
           </form>
         </CardContent>
       </Card>
