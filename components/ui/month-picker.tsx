@@ -23,7 +23,7 @@ export function MonthPicker({ period }: { period: string }) {
   function goTo(newPeriod: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("period", newPeriod);
-    router.push(`?${params.toString()}`);
+    router.push(`?${params.toString()}`, { scroll: false });
     setOpen(false);
   }
 

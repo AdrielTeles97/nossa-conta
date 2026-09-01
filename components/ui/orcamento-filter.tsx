@@ -30,7 +30,7 @@ export function OrcamentoFilter({ currentTab }: { currentTab: string }) {
     if (period) params.set("period", period);
     if (cat) params.set("category", cat);
     else params.delete("category");
-    router.push(`?${params.toString()}`);
+    router.push(`?${params.toString()}`, { scroll: false });
     setOpen(false);
   }
 

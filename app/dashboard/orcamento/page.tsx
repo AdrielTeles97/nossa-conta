@@ -221,13 +221,13 @@ export default async function BudgetPage({
 
       {/* --- ABAS DE NAVEGAÇÃO --- */}
       <div className="flex gap-2 mb-2">
-        <Link href={tabHref("receita")} className={currentTab === "receita" ? activeTabClass : inactiveTabClass}>
+        <Link href={tabHref("receita")} scroll={false} className={currentTab === "receita" ? activeTabClass : inactiveTabClass}>
           Receita
         </Link>
-        <Link href={tabHref("fixa")} className={currentTab === "fixa" ? activeTabClass : inactiveTabClass}>
+        <Link href={tabHref("fixa")} scroll={false} className={currentTab === "fixa" ? activeTabClass : inactiveTabClass}>
           Despesa fixa
         </Link>
-        <Link href={tabHref("variavel")} className={currentTab === "variavel" ? activeTabClass : inactiveTabClass}>
+        <Link href={tabHref("variavel")} scroll={false} className={currentTab === "variavel" ? activeTabClass : inactiveTabClass}>
           Despesa variável
         </Link>
       </div>
