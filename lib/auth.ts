@@ -29,6 +29,15 @@ export const auth = betterAuth({
     }),
     emailAndPassword: {
         enabled: true,
+        sendResetPassword: async ({ user, url }) => {
+          console.log(`[Nossa Conta] Reset para ${user.email}: ${url}`);
+        },
+        resetPasswordTokenExpiresIn: 3600,
+    },
+    session: {
+      expiresIn: 60 * 60 * 24 * 30, // 30 dias quando lembrar
+      updateAge: 60 * 60 * 24,
+      cookieCache: { enabled: true, maxAge: 60 * 5 },
     },
     advanced: {
       crossSubDomainCookies: { enabled: true },
