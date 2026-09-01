@@ -252,56 +252,75 @@ export default async function BudgetPage({
             </div>
           </div>
           
-          <div className="p-0 overflow-x-auto w-full max-w-full">
+          <div className="p-0 w-full max-w-full">
             
             {/* --- TABELA DE RECEITAS --- */}
             {currentTab === "receita" && (
-              <table className="w-full text-sm text-left">
-                <thead className="text-[#8A8D82] text-xs font-semibold border-b border-[#F1F0EA]">
-                  <tr>
-                    <th className="px-6 py-4 font-medium">Nome</th>
-                    <th className="px-6 py-4 font-medium">Categoria</th>
-                    <th className="px-6 py-4 font-medium text-right">Valor</th>
-                    <th className="px-6 py-4 font-medium text-center w-16"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F1F0EA]">
-                  {incomes.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-[#8A8D82]">Nenhuma receita lançada.</td>
-                    </tr>
-                  )}
+              <>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-[#8A8D82] text-xs font-semibold border-b border-[#F1F0EA]">
+                      <tr>
+                        <th className="px-6 py-4 font-medium">Nome</th>
+                        <th className="px-6 py-4 font-medium">Categoria</th>
+                        <th className="px-6 py-4 font-medium text-right">Valor</th>
+                        <th className="px-6 py-4 font-medium text-center w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F1F0EA]">
+                      {incomes.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-12 text-center text-[#8A8D82]">Nenhuma receita lançada.</td>
+                        </tr>
+                      )}
+                      {incomes.map((income: any) => (
+                        <tr key={income.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 font-semibold text-[#1B2430]">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {income.name}
+                              {income.isRecurring && <span className="text-[10px] font-bold bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">↻ Recorrente</span>}
+                              <span className="text-[10px] font-medium bg-[#F1F0EA] text-[#6B7280] px-1.5 py-0.5 rounded-full border border-[#E8E6DD]" title={income.user?.email || ''}>
+                                {(income.user?.name || '—').split(' ')[0]}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full flex items-center gap-1 w-max">
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div> {income.category || "Geral"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-bold text-[#1F6F5C] text-right">{fmt(income.value)}</td>
+                          <td className="px-6 py-4 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <IncomeModal income={income} />
+                              <form action={async () => { "use server"; await deleteIncome(income.id); }}>
+                                <button type="submit" className="text-[#8A8D82] hover:text-[#B23B3B] transition-colors p-1" title="Excluir">
+                                  <Trash2 size={16} />
+                                </button>
+                              </form>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="md:hidden divide-y">
+                  {incomes.length === 0 && <p className="p-6 text-center text-sm text-[#8A8D82]">Nenhuma receita lançada.</p>}
                   {incomes.map((income: any) => (
-                    <tr key={income.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-[#1B2430]">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {income.name}
-                          {income.isRecurring && <span className="text-[10px] font-bold bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">↻ Recorrente</span>}
-                          <span className="text-[10px] font-medium bg-[#F1F0EA] text-[#6B7280] px-1.5 py-0.5 rounded-full border border-[#E8E6DD]" title={income.user?.email || ''}>
-                            {(income.user?.name || '—').split(' ')[0]}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full flex items-center gap-1 w-max">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div> {income.category || "Geral"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-bold text-[#1F6F5C] text-right">{fmt(income.value)}</td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <IncomeModal income={income} />
-                          <form action={async () => { "use server"; await deleteIncome(income.id); }}>
-                            <button type="submit" className="text-[#8A8D82] hover:text-[#B23B3B] transition-colors p-1" title="Excluir">
-                              <Trash2 size={16} />
-                            </button>
-                          </form>
-                        </div>
-                      </td>
-                    </tr>
+                    <div key={income.id} className="p-4 flex justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm flex flex-wrap gap-1 items-center">{income.name} {income.isRecurring && <span className="text-[10px] bg-green-50 text-green-700 border px-1 py-0.5 rounded-full">↻</span>}</div>
+                        <div className="text-xs text-[#8A8D82] flex gap-1 mt-1"><span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[11px]">{income.category}</span> <span className="bg-[#F1F0EA] px-1.5 py-0.5 rounded-full">{(income.user?.name||'—').split(' ')[0]}</span></div>
+                      </div>
+                      <div className="text-right flex flex-col items-end gap-1">
+                        <span className="font-bold text-[#1F6F5C] text-sm">{fmt(income.value)}</span>
+                        <div className="flex gap-1"><IncomeModal income={income} /><form action={async () => { "use server"; await deleteIncome(income.id); }}><button className="p-1 text-[#8A8D82]"><Trash2 size={14} /></button></form></div>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </>
             )}
 
             {/* --- TABELA DE DESPESAS FIXAS --- */}
@@ -310,120 +329,168 @@ export default async function BudgetPage({
                 <div className="px-5 py-2 bg-blue-50/60 border-b border-blue-100 text-[11px] text-blue-800 flex items-center gap-1.5">
                   <Calendar size={12} /> Fixas são trazidas automaticamente para <span className="font-semibold capitalize">{monthLabel}</span> — variáveis só precisam preencher.
                 </div>
-                <table className="w-full text-sm text-left">
-                  <thead className="text-[#8A8D82] text-xs font-semibold border-b border-[#F1F0EA]">
-                    <tr>
-                      <th className="px-6 py-4 font-medium w-12">Pago</th>
-                      <th className="px-6 py-4 font-medium">Venc.</th>
-                      <th className="px-6 py-4 font-medium">Nome</th>
-                      <th className="px-6 py-4 font-medium">Categoria</th>
-                      <th className="px-6 py-4 font-medium text-right">Valor</th>
-                      <th className="px-6 py-4 font-medium text-center w-16"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#F1F0EA]">
-                    {fixedExpenses.length === 0 && (
-                      <tr><td colSpan={6} className="px-6 py-12 text-center text-[#8A8D82]">Nenhuma despesa fixa lançada. Elas aparecem todo mês automaticamente.</td></tr>
-                    )}
+                <div className="hidden md:block">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-[#8A8D82] text-xs font-semibold border-b border-[#F1F0EA]">
+                      <tr>
+                        <th className="px-6 py-4 font-medium w-12">Pago</th>
+                        <th className="px-6 py-4 font-medium">Venc.</th>
+                        <th className="px-6 py-4 font-medium">Nome</th>
+                        <th className="px-6 py-4 font-medium">Categoria</th>
+                        <th className="px-6 py-4 font-medium text-right">Valor</th>
+                        <th className="px-6 py-4 font-medium text-center w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F1F0EA]">
+                      {fixedExpenses.length === 0 && (
+                        <tr><td colSpan={6} className="px-6 py-12 text-center text-[#8A8D82]">Nenhuma despesa fixa lançada. Elas aparecem todo mês automaticamente.</td></tr>
+                      )}
+                    {fixedExpenses.map((expense: any) => {
+                      const isLinked = !!expense.linkedDebtId;
+                      const isPaid = isFixedPaidForPeriod(expense);
+                      return (
+                        <tr key={expense.id} className={`hover:bg-gray-50 transition-colors ${isPaid ? 'opacity-60' : ''} ${isLinked ? 'bg-blue-50/40' : ''}`}>
+                          <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-center`}>
+                            <form action={toggleFixedExpense}>
+                              <input type="hidden" name="id" value={expense.id} />
+                              <input type="hidden" name="period" value={period} />
+                              <button type="submit" className={`p-1 ${isPaid ? 'text-[#1F6F5C]' : 'text-[#8A8D82]'}`} title={isPaid ? "Marcar como não pago" : "Marcar como pago - vira despesa no mês"}>
+                                {isPaid ? <CheckCircle2 size={isLinked ? 16 : 18} /> : <Circle size={isLinked ? 16 : 18} />}
+                              </button>
+                            </form>
+                          </td>
+                          <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-[#8A8D82] text-xs`}>Dia {expense.dueDay}</td>
+                          <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} font-semibold text-[#1B2430] ${isPaid ? 'line-through' : ''} ${isLinked ? 'text-xs' : 'text-sm'}`}>
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5">
+                                {isLinked && <Link2 size={12} className="text-blue-500 flex-shrink-0" />}
+                                <span className="truncate max-w-[140px]">{expense.name}</span>
+                                {isLinked && expense.linkedDebt && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full truncate max-w-[80px]">{expense.linkedDebt.name}</span>}
+                                {!expense.isRecurring && expense.period && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">📅 {expense.period}</span>}
+                                {expense.isRecurring && <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-1 py-0.5 rounded-full">↻</span>}
+                                <span className="text-[10px] font-medium bg-[#F1F0EA] text-[#6B7280] px-1 py-0.5 rounded-full border border-[#E8E6DD] hidden sm:inline">{(expense.user?.name || '—').split(' ')[0]}</span>
+                              </div>
+                              <span className="text-[10px] text-[#8A8D82] font-normal">Lançado em {new Date(expense.createdAt).toLocaleDateString('pt-BR')} {isPaid ? '• pago' : '• pendente'}</span>
+                            </div>
+                          </td>
+                          <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-md border ${isLinked ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                              {isLinked ? 'Vínculo' : expense.category}
+                            </span>
+                          </td>
+                          <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} font-bold text-[#B23B3B] text-right ${isLinked ? 'text-xs' : 'text-sm'}`}>{fmt(expense.value)}</td>
+                          <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-center`}>
+                            <div className="flex items-center justify-center gap-0.5">
+                              <FixedExpenseModal expense={expense} currentPeriod={period} />
+                              <form action={async () => { "use server"; await deleteFixedExpense(expense.id); }}>
+                                <button type="submit" className="text-[#8A8D82] hover:text-[#B23B3B] transition-colors p-0.5" title="Excluir">
+                                  <Trash2 size={14} />
+                                </button>
+                              </form>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                </div>
+                <div className="md:hidden divide-y">
+                  {fixedExpenses.length === 0 && <p className="p-6 text-center text-sm text-[#8A8D82]">Nenhuma despesa fixa.</p>}
                   {fixedExpenses.map((expense: any) => {
                     const isLinked = !!expense.linkedDebtId;
                     const isPaid = isFixedPaidForPeriod(expense);
                     return (
-                      <tr key={expense.id} className={`hover:bg-gray-50 transition-colors ${isPaid ? 'opacity-60' : ''} ${isLinked ? 'bg-blue-50/40' : ''}`}>
-                        <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-center`}>
-                          <form action={toggleFixedExpense}>
-                            <input type="hidden" name="id" value={expense.id} />
-                            <input type="hidden" name="period" value={period} />
-                            <button type="submit" className={`p-1 ${isPaid ? 'text-[#1F6F5C]' : 'text-[#8A8D82]'}`} title={isPaid ? "Marcar como não pago" : "Marcar como pago - vira despesa no mês"}>
-                              {isPaid ? <CheckCircle2 size={isLinked ? 16 : 18} /> : <Circle size={isLinked ? 16 : 18} />}
-                            </button>
-                          </form>
-                        </td>
-                        <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-[#8A8D82] text-xs`}>Dia {expense.dueDay}</td>
-                        <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} font-semibold text-[#1B2430] ${isPaid ? 'line-through' : ''} ${isLinked ? 'text-xs' : 'text-sm'}`}>
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1.5">
-                              {isLinked && <Link2 size={12} className="text-blue-500 flex-shrink-0" />}
-                              <span className="truncate max-w-[140px]">{expense.name}</span>
-                              {isLinked && expense.linkedDebt && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full truncate max-w-[80px]">{expense.linkedDebt.name}</span>}
-                              {!expense.isRecurring && expense.period && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">📅 {expense.period}</span>}
-                              {expense.isRecurring && <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-1 py-0.5 rounded-full">↻</span>}
-                              <span className="text-[10px] font-medium bg-[#F1F0EA] text-[#6B7280] px-1 py-0.5 rounded-full border border-[#E8E6DD] hidden sm:inline">{(expense.user?.name || '—').split(' ')[0]}</span>
-                            </div>
-                            <span className="text-[10px] text-[#8A8D82] font-normal">Lançado em {new Date(expense.createdAt).toLocaleDateString('pt-BR')} {isPaid ? '• pago' : '• pendente'}</span>
-                          </div>
-                        </td>
-                        <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'}`}>
-                          <span className={`text-xs px-2 py-0.5 rounded-md border ${isLinked ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                            {isLinked ? 'Vínculo' : expense.category}
-                          </span>
-                        </td>
-                        <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} font-bold text-[#B23B3B] text-right ${isLinked ? 'text-xs' : 'text-sm'}`}>{fmt(expense.value)}</td>
-                        <td className={`${isLinked ? 'px-6 py-2.5' : 'px-6 py-4'} text-center`}>
-                          <div className="flex items-center justify-center gap-0.5">
-                            <FixedExpenseModal expense={expense} currentPeriod={period} />
-                            <form action={async () => { "use server"; await deleteFixedExpense(expense.id); }}>
-                              <button type="submit" className="text-[#8A8D82] hover:text-[#B23B3B] transition-colors p-0.5" title="Excluir">
-                                <Trash2 size={14} />
-                              </button>
-                            </form>
-                          </div>
-                        </td>
-                      </tr>
+                      <div key={expense.id} className={`p-4 flex gap-3 ${isPaid ? 'opacity-60 bg-gray-50' : ''} ${isLinked ? 'bg-blue-50/30' : ''}`}>
+                        <form action={toggleFixedExpense} className="pt-1">
+                          <input type="hidden" name="id" value={expense.id} />
+                          <input type="hidden" name="period" value={period} />
+                          <button type="submit" className={isPaid ? 'text-[#1F6F5C]' : 'text-[#8A8D82]'}>
+                            {isPaid ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                          </button>
+                        </form>
+                        <div className="flex-1 min-w-0">
+                          <div className={`font-semibold text-sm flex flex-wrap gap-1 ${isPaid ? 'line-through' : ''}`}>{expense.name} {isLinked && <span className="text-[10px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded-full">Vínculo</span>} {expense.isRecurring && <span className="text-[10px] bg-green-50 border px-1 rounded-full">↻</span>}</div>
+                          <div className="text-xs text-[#8A8D82] mt-1">Dia {expense.dueDay} • {expense.category} • {fmt(expense.value)}</div>
+                          <div className="text-[11px] text-[#8A8D82]">por {(expense.user?.name||'—').split(' ')[0]} • {new Date(expense.createdAt).toLocaleDateString('pt-BR')}</div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <FixedExpenseModal expense={expense} currentPeriod={period} />
+                          <form action={async () => { "use server"; await deleteFixedExpense(expense.id); }}><button className="p-1 text-[#8A8D82]"><Trash2 size={14} /></button></form>
+                        </div>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
               </>
             )}
 
             {/* --- TABELA DE DESPESAS VARIÁVEIS --- */}
             {currentTab === "variavel" && (
-              <table className="w-full text-sm text-left">
-                <thead className="text-[#8A8D82] text-xs font-semibold border-b border-[#F1F0EA]">
-                  <tr>
-                    <th className="px-6 py-4 font-medium">Data</th>
-                    <th className="px-6 py-4 font-medium">Nome</th>
-                    <th className="px-6 py-4 font-medium">Categoria</th>
-                    <th className="px-6 py-4 font-medium text-right">Valor</th>
-                    <th className="px-6 py-4 font-medium text-center w-16"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F1F0EA]">
-                  {variableExpenses.length === 0 && (
-                    <tr><td colSpan={5} className="px-6 py-12 text-center text-[#8A8D82]">Nenhum gasto variável lançado.</td></tr>
-                  )}
+              <>
+                <div className="hidden md:block">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-[#8A8D82] text-xs font-semibold border-b border-[#F1F0EA]">
+                      <tr>
+                        <th className="px-6 py-4 font-medium">Data</th>
+                        <th className="px-6 py-4 font-medium">Nome</th>
+                        <th className="px-6 py-4 font-medium">Categoria</th>
+                        <th className="px-6 py-4 font-medium text-right">Valor</th>
+                        <th className="px-6 py-4 font-medium text-center w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F1F0EA]">
+                      {variableExpenses.length === 0 && (
+                        <tr><td colSpan={5} className="px-6 py-12 text-center text-[#8A8D82]">Nenhum gasto variável lançado.</td></tr>
+                      )}
+                      {variableExpenses.map((expense: any) => (
+                        <tr key={expense.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 text-[#8A8D82]">
+                            <span className="flex items-center gap-1.5"><Clock size={12}/> {new Date(expense.date).toLocaleDateString('pt-BR')}</span>
+                          </td>
+                          <td className="px-6 py-4 font-semibold text-[#1B2430]">
+                            <div className="flex items-center gap-2">
+                              {expense.name}
+                              <span className="text-[10px] font-medium bg-[#F1F0EA] text-[#6B7280] px-1.5 py-0.5 rounded-full border border-[#E8E6DD]">{(expense.user?.name || '—').split(' ')[0]}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md border border-gray-200">
+                              {expense.category}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-bold text-[#B23B3B] text-right">{fmt(expense.value)}</td>
+                          <td className="px-6 py-4 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <VariableExpenseModal expense={expense} />
+                              <form action={async () => { "use server"; await deleteVariableExpense(expense.id); }}>
+                                <button type="submit" className="text-[#8A8D82] hover:text-[#B23B3B] transition-colors p-1" title="Excluir">
+                                  <Trash2 size={16} />
+                                </button>
+                              </form>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="md:hidden divide-y">
+                  {variableExpenses.length === 0 && <p className="p-6 text-center text-sm text-[#8A8D82]">Nenhum gasto variável.</p>}
                   {variableExpenses.map((expense: any) => (
-                    <tr key={expense.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 text-[#8A8D82]">
-                        <span className="flex items-center gap-1.5"><Clock size={12}/> {new Date(expense.date).toLocaleDateString('pt-BR')}</span>
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-[#1B2430]">
-                        <div className="flex items-center gap-2">
-                          {expense.name}
-                          <span className="text-[10px] font-medium bg-[#F1F0EA] text-[#6B7280] px-1.5 py-0.5 rounded-full border border-[#E8E6DD]">{(expense.user?.name || '—').split(' ')[0]}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md border border-gray-200">
-                          {expense.category}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-bold text-[#B23B3B] text-right">{fmt(expense.value)}</td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <VariableExpenseModal expense={expense} />
-                          <form action={async () => { "use server"; await deleteVariableExpense(expense.id); }}>
-                            <button type="submit" className="text-[#8A8D82] hover:text-[#B23B3B] transition-colors p-1" title="Excluir">
-                              <Trash2 size={16} />
-                            </button>
-                          </form>
-                        </div>
-                      </td>
-                    </tr>
+                    <div key={expense.id} className="p-4 flex justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm">{expense.name}</div>
+                        <div className="text-xs text-[#8A8D82] flex items-center gap-1 mt-1"><Clock size={10} />{new Date(expense.date).toLocaleDateString('pt-BR')} • <span className="bg-gray-100 px-1.5 py-0.5 rounded-full text-[11px]">{expense.category}</span> • {(expense.user?.name||'—').split(' ')[0]}</div>
+                      </div>
+                      <div className="text-right flex flex-col items-end gap-1">
+                        <span className="font-bold text-[#B23B3B] text-sm">{fmt(expense.value)}</span>
+                        <div className="flex gap-1"><VariableExpenseModal expense={expense} /><form action={async () => { "use server"; await deleteVariableExpense(expense.id); }}><button className="p-1 text-[#8A8D82]"><Trash2 size={14} /></button></form></div>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </>
             )}
             
           </div>
