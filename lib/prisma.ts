@@ -13,8 +13,9 @@ const hasHousehold = (globalForPrisma.prisma as unknown as { household?: unknown
 const hasCategory = (globalForPrisma.prisma as unknown as { category?: unknown })?.category !== undefined;
 const hasCash = (globalForPrisma.prisma as unknown as { cashBalance?: unknown })?.cashBalance !== undefined;
 const hasDebtPayment = (globalForPrisma.prisma as unknown as { debtPayment?: unknown })?.debtPayment !== undefined;
+const hasAllocation = (globalForPrisma.prisma as unknown as { incomeAllocation?: unknown })?.incomeAllocation !== undefined;
 export const prisma =
-  globalForPrisma.prisma && hasHousehold && hasCategory && hasCash && hasDebtPayment ? globalForPrisma.prisma : new PrismaClient({ adapter });
+  globalForPrisma.prisma && hasHousehold && hasCategory && hasCash && hasDebtPayment && hasAllocation ? globalForPrisma.prisma : new PrismaClient({ adapter });
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;

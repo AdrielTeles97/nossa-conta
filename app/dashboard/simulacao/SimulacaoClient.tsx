@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
 
 function parseBRL(s: string) {
   if (!s) return 0;
@@ -35,8 +35,8 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
   const [salario2, setSalario2] = useState("R$ 4.600,00");
   const [bonusSet, setBonusSet] = useState("R$ 2.200,00");
   const [bonusDez, setBonusDez] = useState("R$ 10.200,00");
-  const [caixa0, setCaixa0] = useState(defaults ? `R$ ${defaults.caixa.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "R$ 1.500,00");
-  const [fixas, setFixas] = useState(defaults ? `R$ ${defaults.despesasFixas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "R$ 4.984,90");
+  const [caixa0, setCaixa0] = useState("R$ 1.500,00");
+  const [fixas, setFixas] = useState("R$ 4.984,90");
   const [horizonte, setHorizonte] = useState("7");
   const [entries, setEntries] = useState<Entry[]>([
     { id: "1", nome: "Quitação Nubank (2x)", total: "R$ 3.270,78", mes: "2026-09", parcelas: "1", pagas: "0", taxa: "0", forma: "dinheiro", categoria: "pontual" },
@@ -48,6 +48,8 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
     { id: "7", nome: "Ripão 7 dz", total: "R$ 490,00", mes: "2026-10", parcelas: "6", pagas: "0", taxa: "0", forma: "cartao", categoria: "material" },
     { id: "8", nome: "Mão de obra pedreiro", total: "R$ 3.500,00", mes: "2026-10", parcelas: "1", pagas: "0", taxa: "0", forma: "dinheiro", categoria: "mao" },
   ]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState<Entry | null>(null);
   const [newNome, setNewNome] = useState("");
   const [newTotal, setNewTotal] = useState("");
   const [newMes, setNewMes] = useState("2026-10");
@@ -60,7 +62,7 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
   const rendaFixa = parseBRL(salario1) + parseBRL(salario2);
   const meses = useMemo(() => {
     const h = parseInt(horizonte) || 7;
-    const start = new Date(2026, 8, 1); // Set 2026
+    const start = new Date(2026, 8, 1);
     return Array.from({ length: h }, (_, i) => {
       const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
       const k = `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -79,7 +81,6 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
       if (m.k === "2026-12") bonus = parseBRL(bonusDez);
       const renda = rendaFixa + bonus;
       const totalDisp = renda + saldoInicial;
-      // despesas do mês: fixas + entradas pontuais/obra que caem neste mês
       let obraNoMes = 0;
       entries.forEach((e) => {
         const total = parseBRL(e.total);
@@ -93,7 +94,6 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
         if (startIdx === -1 || curIdx === -1) return;
         if (curIdx < startIdx) return;
         if (curIdx >= startIdx + parc) return;
-        // se já pagas, pula as primeiras
         const idxInParc = curIdx - startIdx;
         if (idxInParc < pagas) return;
         obraNoMes += parcela;
@@ -109,6 +109,16 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
     if (!newNome || !newTotal) return;
     setEntries((prev) => [...prev, { id: Date.now().toString(), nome: newNome, total: newTotal, mes: newMes, parcelas: newParcelas, pagas: newPagas, taxa: newTaxa, forma: newForma, categoria: newCat }]);
     setNewNome(""); setNewTotal(""); setNewPagas("0"); setNewTaxa("0");
+  }
+  function startEdit(e: Entry) {
+    setEditingId(e.id);
+    setEditData({ ...e });
+  }
+  function saveEdit() {
+    if (!editData) return;
+    setEntries((prev) => prev.map((x) => x.id === editData.id ? editData : x));
+    setEditingId(null);
+    setEditData(null);
   }
 
   return (
@@ -131,7 +141,7 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
       {tab === "premissa" && (
         <div className="space-y-4">
           <Card className="bg-amber-50 border-amber-200">
-            <CardContent className="p-3 text-xs text-amber-800">Fixas mensais puxadas de <b>Gastos Mensais</b> ({fmt(parseBRL(fixas))}) — edite lá que reflete aqui. | Caixa inicial = saldo anterior editável.</CardContent>
+            <CardContent className="p-3 text-xs text-amber-800">Fixas mensais puxadas de <b>Gastos Mensais</b> ({fmt(parseBRL(fixas))}) — edite lá que reflete aqui. | Caixa inicial = saldo anterior editável. • <b>Agora editável abaixo</b></CardContent>
           </Card>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="bg-white border-none shadow-sm rounded-2xl">
@@ -146,7 +156,7 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
                   <div><Label className="text-xs">13º Dez</Label><CurrencyInput value={bonusDez} onValueChange={setBonusDez} className="bg-white h-9" /></div>
                 </div>
                 <div><Label className="text-xs">Caixa em mãos (início Set)</Label><CurrencyInput value={caixa0} onValueChange={setCaixa0} className="bg-white h-9" /></div>
-                <div><Label className="text-xs">Despesas fixas mensais (de Gastos Mensais)</Label><CurrencyInput value={fixas} onValueChange={setFixas} className="bg-white h-9" /></div>
+                <div><Label className="text-xs">Despesas fixas mensais</Label><CurrencyInput value={fixas} onValueChange={setFixas} className="bg-white h-9" /></div>
               </CardContent>
             </Card>
 
@@ -168,22 +178,46 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
                   <div><Label className="text-xs">Forma</Label><select value={newForma} onChange={(e) => setNewForma(e.target.value as any)} className="h-8 w-full rounded-md border bg-white px-2 text-xs"><option value="dinheiro">Dinheiro</option><option value="cartao">Cartão</option></select></div>
                 </div>
                 <Button onClick={addEntry} className="w-full bg-[#1F6F5C] gap-1"><Plus size={14} /> Adicionar</Button>
-                <p className="text-[11px] text-[#8A8D82]">Ex: Cimento R$1.650 em 6x com 2% taxa, 1 já paga → 5 parcelas de {fmt(parseBRL(newTotal||"R$ 0,00") * (1+ (parseFloat(newTaxa.replace(",","."))||0)/100) / (parseInt(newParcelas)||1))} a partir de {newMes}.</p>
               </CardContent>
             </Card>
           </div>
 
           <Card className="bg-white border-none shadow-sm rounded-2xl">
-            <CardHeader className="p-4 pb-2"><CardTitle className="text-xs tracking-widest uppercase">Lançamentos ({entries.length})</CardTitle></CardHeader>
+            <CardHeader className="p-4 pb-2"><CardTitle className="text-xs tracking-widest uppercase">Lançamentos ({entries.length}) — clique no lápis para editar</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y max-h-[320px] overflow-auto">
+              <div className="divide-y max-h-[420px] overflow-auto">
                 {entries.map((e) => (
-                  <div key={e.id} className="p-3 flex justify-between gap-3 text-xs">
-                    <div>
-                      <div className="font-semibold">{e.nome} <span className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full">{e.categoria}</span> <span className="text-[10px] bg-blue-50 text-blue-700 px-1 py-0.5 rounded-full">{e.forma}</span></div>
-                      <div className="text-[#8A8D82]">{e.mes} • {e.parcelas}x {e.pagas !== "0" ? `(${e.pagas} pagas)` : ""} {e.taxa !== "0" ? `• ${e.taxa}% taxa` : ""} • {e.total}</div>
-                    </div>
-                    <button onClick={() => setEntries((prev) => prev.filter((x) => x.id !== e.id))} className="text-[#B23B3B] p-1"><Trash2 size={14} /></button>
+                  <div key={e.id} className="p-3 text-xs">
+                    {editingId === e.id && editData ? (
+                      <div className="space-y-2 bg-[#FBFAF6] p-3 rounded-lg border">
+                        <Input value={editData.nome} onChange={(ev) => setEditData({ ...editData, nome: ev.target.value })} className="bg-white h-8" placeholder="Nome" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <CurrencyInput value={editData.total} onValueChange={(v) => setEditData({ ...editData, total: v })} className="bg-white h-8" />
+                          <MonthYearPicker value={editData.mes} onChange={(v) => setEditData({ ...editData, mes: v })} />
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          <Input value={editData.parcelas} onChange={(ev) => setEditData({ ...editData, parcelas: ev.target.value })} className="bg-white h-8" placeholder="Parc" />
+                          <Input value={editData.pagas} onChange={(ev) => setEditData({ ...editData, pagas: ev.target.value })} className="bg-white h-8" />
+                          <Input value={editData.taxa} onChange={(ev) => setEditData({ ...editData, taxa: ev.target.value })} className="bg-white h-8" />
+                          <select value={editData.forma} onChange={(ev) => setEditData({ ...editData, forma: ev.target.value as any })} className="h-8 rounded-md border bg-white px-2"><option value="dinheiro">Dinheiro</option><option value="cartao">Cartão</option></select>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" className="bg-[#1F6F5C] gap-1" onClick={saveEdit}><Check size={12} /> Salvar</Button>
+                          <Button size="sm" variant="outline" onClick={() => { setEditingId(null); setEditData(null); }}><X size={12} /> Cancelar</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between gap-3">
+                        <div>
+                          <div className="font-semibold">{e.nome} <span className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full">{e.categoria}</span> <span className="text-[10px] bg-blue-50 text-blue-700 px-1 py-0.5 rounded-full">{e.forma}</span></div>
+                          <div className="text-[#8A8D82]">{e.mes} • {e.parcelas}x {e.pagas !== "0" ? `(${e.pagas} pagas)` : ""} {e.taxa !== "0" ? `• ${e.taxa}% taxa` : ""} • {e.total}</div>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => startEdit(e)} className="text-[#1F6F5C] p-1"><Pencil size={14} /></button>
+                          <button onClick={() => setEntries((prev) => prev.filter((x) => x.id !== e.id))} className="text-[#B23B3B] p-1"><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -212,7 +246,7 @@ export default function SimulacaoClient({ defaults }: { defaults: { rendaFixa: n
                 <tr className="bg-[#E8F5E9] font-bold"><td className="px-3 py-2">Total disponível</td>{fluxo.map((m) => <td key={m.k} className="px-3 py-2 text-right">{fmt(m.totalDisp)}</td>)}</tr>
                 <tr><td colSpan={fluxo.length +1} className="bg-[#1F6F5C] text-white px-3 py-1.5 font-bold text-[11px] tracking-widest uppercase">Despesas + Obra</td></tr>
                 <tr><td className="px-3 py-2">- Fixas</td>{fluxo.map((m) => <td key={m.k} className="px-3 py-2 text-right text-red-600">({fmt(parseBRL(fixas))})</td>)}</tr>
-                <tr><td className="px-3 py-2">- Obra/Pontuais</td>{fluxo.map((m) => <td key={m.k} className="px-3 py-2 text-right text-red-600">({fmt(m.obraNoMes + (m.k==="2026-09" ? parseBRL("R$ 0,00") : 0))})</td>)}</tr>
+                <tr><td className="px-3 py-2">- Obra/Pontuais</td>{fluxo.map((m) => <td key={m.k} className="px-3 py-2 text-right text-red-600">({fmt(m.obraNoMes)})</td>)}</tr>
                 <tr className="bg-[#FFEBEE] font-bold text-red-700"><td className="px-3 py-2">Total despesas</td>{fluxo.map((m) => <td key={m.k} className="px-3 py-2 text-right">({fmt(m.totalDespesas)})</td>)}</tr>
                 <tr className="bg-[#E0F2F1] font-bold"><td className="px-3 py-2">Saldo final</td>{fluxo.map((m) => <td key={m.k} className={`px-3 py-2 text-right ${m.saldoFinal < 0 ? "text-red-600" : "text-[#1F6F5C]"}`}>{fmt(m.saldoFinal)}</td>)}</tr>
               </tbody>

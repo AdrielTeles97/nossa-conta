@@ -22,6 +22,7 @@ model Household {
   categories Category[]
   cashBalances CashBalance[]
   debtPayments DebtPayment[]
+  incomeAllocations IncomeAllocation[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -126,7 +127,10 @@ model Income {
   value       Decimal  @db.Decimal(10, 2)
   category    String   @default("Geral")
   isRecurring Boolean  @default(false)
+  payDay      Int?     // dia que recebe (10, 30, 01)
   
+  allocations IncomeAllocation[]
+
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   household   Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
@@ -135,6 +139,24 @@ model Income {
 
   @@index([householdId])
   @@index([isRecurring])
+  @@index([payDay])
+}
+
+model IncomeAllocation {
+  id             String   @id @default(cuid())
+  householdId    String
+  household      Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  incomeId       String
+  income         Income   @relation(fields: [incomeId], references: [id], onDelete: Cascade)
+  fixedExpenseId String
+  fixedExpense   FixedExpense @relation(fields: [fixedExpenseId], references: [id], onDelete: Cascade)
+  amount         Decimal  @db.Decimal(10,2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([incomeId, fixedExpenseId])
+  @@index([householdId])
+  @@map("income_allocation")
 }
 
 model VariableExpense {
@@ -222,6 +244,8 @@ model FixedExpense {
   
   linkedDebtId String?
   linkedDebt   Debt?    @relation(fields: [linkedDebtId], references: [id], onDelete: SetNull)
+
+  allocations IncomeAllocation[]
 
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   household    Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)

@@ -48,16 +48,28 @@ export async function addIncome(formData: FormData) {
     const dateStr = formData.get('date') as string | null;
     const category = (formData.get('category') as string) || 'Geral';
     const isRecurring = formData.get('isRecurring') === 'on' || formData.get('isRecurring') === 'true';
+    const payDay = parseInt(formData.get('payDay') as string) || null;
 
     if (!name || isNaN(value)) return;
 
-    const data: any = { name, value, category, isRecurring, userId: user.id, householdId };
+    const data: any = { name, value, category, isRecurring, payDay, userId: user.id, householdId };
     if (dateStr) {
       const d = new Date(dateStr);
       if (!isNaN(d.getTime())) data.createdAt = d;
     }
 
-    await prisma.income.create({ data });
+    const income = await prisma.income.create({ data });
+
+    // vincula despesas fixas selecionadas
+    for (const [key, val] of formData.entries()) {
+      if (key.startsWith('alloc_')) {
+        const fixedId = key.replace('alloc_', '');
+        const amount = parseCurrency(val as string);
+        if (!isNaN(amount) && amount > 0) {
+          await prisma.incomeAllocation.create({ data: { householdId, incomeId: income.id, fixedExpenseId: fixedId, amount } });
+        }
+      }
+    }
 
     revalidateBudgetPaths();
 }
@@ -69,13 +81,26 @@ export async function updateIncome(formData: FormData) {
     const category = (formData.get('category') as string) || 'Geral';
     const dateStr = formData.get('date') as string | null;
     const isRecurring = formData.get('isRecurring') === 'on' || formData.get('isRecurring') === 'true';
+    const payDay = parseInt(formData.get('payDay') as string) || null;
     if (!id || !name || isNaN(value)) return;
-    const data: any = { name, value, category, isRecurring };
+    const data: any = { name, value, category, isRecurring, payDay };
     if (dateStr) {
       const d = new Date(dateStr);
       if (!isNaN(d.getTime())) data.createdAt = d;
     }
     await prisma.income.update({ where: { id }, data });
+    // atualiza alocações: apaga antigas e recria
+    await prisma.incomeAllocation.deleteMany({ where: { incomeId: id } });
+    for (const [key, val] of formData.entries()) {
+      if (key.startsWith('alloc_')) {
+        const fixedId = key.replace('alloc_', '');
+        const amount = parseCurrency(val as string);
+        if (!isNaN(amount) && amount > 0) {
+          const household = await prisma.income.findUnique({ where: { id }, select: { householdId: true } });
+          await prisma.incomeAllocation.create({ data: { householdId: household?.householdId!, incomeId: id, fixedExpenseId: fixedId, amount } });
+        }
+      }
+    }
     revalidateBudgetPaths();
 }
 
