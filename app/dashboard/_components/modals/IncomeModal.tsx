@@ -27,8 +27,8 @@ type IncomeData = {
   payDay?: number | null;
 };
 
-type FixedOpt = { id: string; name: string; value: any; dueDay: number };
-type VarOpt = { id: string; name: string; value: any; category: string };
+type FixedOpt = { id: string; name: string; value: any; dueDay: number; allocated?: boolean };
+type VarOpt = { id: string; name: string; value: any; category: string; allocated?: boolean };
 
 export function IncomeModal({ income }: { income?: IncomeData }) {
   const isEdit = !!income;
@@ -50,10 +50,14 @@ export function IncomeModal({ income }: { income?: IncomeData }) {
     return isNaN(n) ? 0 : n;
   };
 
+  // período atual para travar alocações duplicadas no mesmo mês
+  const currentPeriod = date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}` : new Date().toISOString().slice(0, 7);
+
   useEffect(() => {
     if (open) {
-      // busca fixas e variáveis para vincular
-      fetch("/api/fixed-for-alloc").then((r) => r.json()).then((d) => {
+      // busca fixas e variáveis para vincular, já marcando se está alocado em outro salário no mesmo período
+      const periodParam = currentPeriod ? `?period=${currentPeriod}${isEdit && income ? `&excludeIncomeId=${income.id}` : ""}` : "";
+      fetch(`/api/fixed-for-alloc${periodParam}`).then((r) => r.json()).then((d) => {
         if (Array.isArray(d)) {
           setFixedOpts(d || []);
           setVarOpts([]);
@@ -68,10 +72,12 @@ export function IncomeModal({ income }: { income?: IncomeData }) {
         setCategory(income.category || "Geral");
         setIsRecurring(!!income.isRecurring);
         setPayDay(income.payDay ? String(income.payDay) : "");
-        // carrega alocações existentes (fixas e variáveis)
+        // carrega alocações existentes (fixas e variáveis) - filtra por período atual
         fetch(`/api/alloc?incomeId=${income.id}`).then((r) => r.json()).then((d) => {
           const m: Record<string, string> = {};
           (d || []).forEach((a: any) => {
+            // só carrega se for do período atual (ou sem período = global)
+            if (a.period && a.period !== currentPeriod) return;
             if (a.fixedExpenseId) m[`fixed_${a.fixedExpenseId}`] = fmtCurrency(a.amount);
             if (a.variableExpenseId) m[`var_${a.variableExpenseId}`] = fmtCurrency(a.amount);
           });
@@ -86,16 +92,17 @@ export function IncomeModal({ income }: { income?: IncomeData }) {
         setAlloc({});
       }
     }
-  }, [open, isEdit, income]);
+  }, [open, isEdit, income, currentPeriod]);
 
   const totalAlocado = Object.values(alloc).reduce((a, v) => a + parseBRL(v), 0);
   const sobra = parseBRL(value) - totalAlocado;
 
   async function clientAction(formData: FormData) {
-    // adiciona alocações ao formData (chaves já com prefixo fixed_/var_)
+    // adiciona alocações ao formData (chaves já com prefixo fixed_/var_) + período para travar por mês
     Object.entries(alloc).forEach(([key, val]) => {
       if (parseBRL(val) > 0) formData.set(`alloc_${key}`, val);
     });
+    formData.set("allocPeriod", currentPeriod);
     if (isEdit) await updateIncome(formData);
     else await addIncome(formData);
     setOpen(false);
@@ -167,54 +174,62 @@ export function IncomeModal({ income }: { income?: IncomeData }) {
                 <div className="text-[11px] font-bold text-[#1F6F5C] mb-1">Despesas fixas</div>
                 <div className="max-h-[140px] overflow-auto divide-y border rounded-lg">
                   {fixedOpts.length === 0 && <p className="text-xs text-[#8A8D82] p-3">Nenhuma fixa. Crie em Gastos Mensais.</p>}
-                  {fixedOpts.map((f) => (
-                    <label key={`fixed_${f.id}`} className="flex items-center gap-2 p-2 hover:bg-[#F9F9F7] cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={alloc[`fixed_${f.id}`] !== undefined}
-                        onChange={(e) => {
-                          if (e.target.checked) setAlloc((prev) => ({ ...prev, [`fixed_${f.id}`]: fmt(f.value) }));
-                          else setAlloc((prev) => { const n = { ...prev }; delete n[`fixed_${f.id}`]; return n; });
-                        }}
-                        className="h-4 w-4 rounded border-gray-300 text-[#1F6F5C]"
-                      />
-                      <span className="flex-1 text-xs font-medium">{f.name} <span className="text-[#8A8D82]">• Dia {f.dueDay}</span></span>
-                      <CurrencyInput
-                        value={alloc[`fixed_${f.id}`] || ""}
-                        onValueChange={(v) => setAlloc((prev) => ({ ...prev, [`fixed_${f.id}`]: v }))}
-                        placeholder={fmt(f.value)}
-                        className="h-8 w-28 bg-white text-xs"
-                        disabled={alloc[`fixed_${f.id}`] === undefined}
-                      />
-                    </label>
-                  ))}
+                  {fixedOpts.map((f) => {
+                    const isAllocated = (f as any).allocated && alloc[`fixed_${f.id}`] === undefined;
+                    return (
+                      <label key={`fixed_${f.id}`} className={`flex items-center gap-2 p-2 hover:bg-[#F9F9F7] ${isAllocated ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
+                        <input
+                          type="checkbox"
+                          checked={alloc[`fixed_${f.id}`] !== undefined}
+                          disabled={isAllocated}
+                          onChange={(e) => {
+                            if (e.target.checked) setAlloc((prev) => ({ ...prev, [`fixed_${f.id}`]: fmt(f.value) }));
+                            else setAlloc((prev) => { const n = { ...prev }; delete n[`fixed_${f.id}`]; return n; });
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-[#1F6F5C] disabled:opacity-50"
+                        />
+                        <span className="flex-1 text-xs font-medium">{f.name} <span className="text-[#8A8D82]">• Dia {f.dueDay}</span> {isAllocated && <span className="text-[10px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full">já vinculado em {currentPeriod}</span>}</span>
+                        <CurrencyInput
+                          value={alloc[`fixed_${f.id}`] || ""}
+                          onValueChange={(v) => setAlloc((prev) => ({ ...prev, [`fixed_${f.id}`]: v }))}
+                          placeholder={fmt(f.value)}
+                          className="h-8 w-28 bg-white text-xs"
+                          disabled={alloc[`fixed_${f.id}`] === undefined}
+                        />
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
               <div>
                 <div className="text-[11px] font-bold text-[#B23B3B] mb-1">Despesas variáveis</div>
                 <div className="max-h-[120px] overflow-auto divide-y border rounded-lg">
                   {varOpts.length === 0 && <p className="text-xs text-[#8A8D82] p-3">Nenhuma variável recente. Crie em Gastos Mensais.</p>}
-                  {varOpts.map((v) => (
-                    <label key={`var_${v.id}`} className="flex items-center gap-2 p-2 hover:bg-[#F9F9F7] cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={alloc[`var_${v.id}`] !== undefined}
-                        onChange={(e) => {
-                          if (e.target.checked) setAlloc((prev) => ({ ...prev, [`var_${v.id}`]: fmt(v.value) }));
-                          else setAlloc((prev) => { const n = { ...prev }; delete n[`var_${v.id}`]; return n; });
-                        }}
-                        className="h-4 w-4 rounded border-gray-300 text-[#B23B3B]"
-                      />
-                      <span className="flex-1 text-xs font-medium">{v.name} <span className="text-[#8A8D82]">• {v.category}</span></span>
-                      <CurrencyInput
-                        value={alloc[`var_${v.id}`] || ""}
-                        onValueChange={(vv) => setAlloc((prev) => ({ ...prev, [`var_${v.id}`]: vv }))}
-                        placeholder={fmt(v.value)}
-                        className="h-8 w-28 bg-white text-xs"
-                        disabled={alloc[`var_${v.id}`] === undefined}
-                      />
-                    </label>
-                  ))}
+                  {varOpts.map((v) => {
+                    const isAllocated = (v as any).allocated && alloc[`var_${v.id}`] === undefined;
+                    return (
+                      <label key={`var_${v.id}`} className={`flex items-center gap-2 p-2 hover:bg-[#F9F9F7] ${isAllocated ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
+                        <input
+                          type="checkbox"
+                          checked={alloc[`var_${v.id}`] !== undefined}
+                          disabled={isAllocated}
+                          onChange={(e) => {
+                            if (e.target.checked) setAlloc((prev) => ({ ...prev, [`var_${v.id}`]: fmt(v.value) }));
+                            else setAlloc((prev) => { const n = { ...prev }; delete n[`var_${v.id}`]; return n; });
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-[#B23B3B] disabled:opacity-50"
+                        />
+                        <span className="flex-1 text-xs font-medium">{v.name} <span className="text-[#8A8D82]">• {v.category}</span> {isAllocated && <span className="text-[10px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full">já vinculado</span>}</span>
+                        <CurrencyInput
+                          value={alloc[`var_${v.id}`] || ""}
+                          onValueChange={(vv) => setAlloc((prev) => ({ ...prev, [`var_${v.id}`]: vv }))}
+                          placeholder={fmt(v.value)}
+                          className="h-8 w-28 bg-white text-xs"
+                          disabled={alloc[`var_${v.id}`] === undefined}
+                        />
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
               <div className="text-[11px] text-[#8A8D82]">Total alocado: <b>{fmt(totalAlocado)}</b> • Sobra: <b className={sobra >= 0 ? "text-green-700" : "text-red-600"}>{fmt(sobra)}</b></div>

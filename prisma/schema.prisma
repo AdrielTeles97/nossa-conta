@@ -153,12 +153,14 @@ model IncomeAllocation {
   variableExpenseId  String?
   variableExpense    VariableExpense? @relation(fields: [variableExpenseId], references: [id], onDelete: Cascade)
   amount             Decimal  @db.Decimal(10,2)
+  period             String?  // YYYY-MM para travar por mês, null = global
 
   createdAt DateTime @default(now())
 
-  @@unique([incomeId, fixedExpenseId])
-  @@unique([incomeId, variableExpenseId])
+  @@unique([incomeId, fixedExpenseId, period])
+  @@unique([incomeId, variableExpenseId, period])
   @@index([householdId])
+  @@index([period])
   @@map("income_allocation")
 }
 

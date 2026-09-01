@@ -60,27 +60,27 @@ export async function addIncome(formData: FormData) {
 
     const income = await prisma.income.create({ data });
 
-    // vincula despesas fixas e variáveis selecionadas
+    // vincula despesas fixas e variáveis selecionadas (com período para travar duplicidade)
+    const allocPeriod = (formData.get('allocPeriod') as string) || (formData.get('period') as string) || new Date().toISOString().slice(0, 7);
     for (const [key, val] of formData.entries()) {
       if (key.startsWith('alloc_fixed_')) {
         const fixedId = key.replace('alloc_fixed_', '');
         const amount = parseCurrency(val as string);
         if (!isNaN(amount) && amount > 0) {
-          await prisma.incomeAllocation.create({ data: { householdId, incomeId: income.id, fixedExpenseId: fixedId, amount } });
+          await prisma.incomeAllocation.create({ data: { householdId, incomeId: income.id, fixedExpenseId: fixedId, amount, period: allocPeriod } });
         }
       } else if (key.startsWith('alloc_var_')) {
         const varId = key.replace('alloc_var_', '');
         const amount = parseCurrency(val as string);
         if (!isNaN(amount) && amount > 0) {
-          await prisma.incomeAllocation.create({ data: { householdId, incomeId: income.id, variableExpenseId: varId, amount } });
+          await prisma.incomeAllocation.create({ data: { householdId, incomeId: income.id, variableExpenseId: varId, amount, period: allocPeriod } });
         }
       } else if (key.startsWith('alloc_')) {
         // compatibilidade antigo (só fixas)
         const fixedId = key.replace('alloc_', '');
         const amount = parseCurrency(val as string);
         if (!isNaN(amount) && amount > 0) {
-          // tenta como fixed, se falhar ignora
-          try { await prisma.incomeAllocation.create({ data: { householdId, incomeId: income.id, fixedExpenseId: fixedId, amount } }); } catch {}
+          try { await prisma.incomeAllocation.create({ data: { householdId, incomeId: income.id, fixedExpenseId: fixedId, amount, period: allocPeriod } }); } catch {}
         }
       }
     }
@@ -103,29 +103,32 @@ export async function updateIncome(formData: FormData) {
       if (!isNaN(d.getTime())) data.createdAt = d;
     }
     await prisma.income.update({ where: { id }, data });
-    // atualiza alocações: apaga antigas e recria (fixas e variáveis)
-    await prisma.incomeAllocation.deleteMany({ where: { incomeId: id } });
+    // atualiza alocações: apaga antigas do período e recria
+    const allocPeriodUpd = (formData.get('allocPeriod') as string) || new Date().toISOString().slice(0, 7);
+    await prisma.incomeAllocation.deleteMany({ where: { incomeId: id, period: allocPeriodUpd } });
+    // também limpa antigas sem período (legado) para evitar duplicidade
+    await prisma.incomeAllocation.deleteMany({ where: { incomeId: id, period: null } });
     for (const [key, val] of formData.entries()) {
       if (key.startsWith('alloc_fixed_')) {
         const fixedId = key.replace('alloc_fixed_', '');
         const amount = parseCurrency(val as string);
         if (!isNaN(amount) && amount > 0) {
           const household = await prisma.income.findUnique({ where: { id }, select: { householdId: true } });
-          await prisma.incomeAllocation.create({ data: { householdId: household?.householdId!, incomeId: id, fixedExpenseId: fixedId, amount } });
+          await prisma.incomeAllocation.create({ data: { householdId: household?.householdId!, incomeId: id, fixedExpenseId: fixedId, amount, period: allocPeriodUpd } });
         }
       } else if (key.startsWith('alloc_var_')) {
         const varId = key.replace('alloc_var_', '');
         const amount = parseCurrency(val as string);
         if (!isNaN(amount) && amount > 0) {
           const household = await prisma.income.findUnique({ where: { id }, select: { householdId: true } });
-          await prisma.incomeAllocation.create({ data: { householdId: household?.householdId!, incomeId: id, variableExpenseId: varId, amount } });
+          await prisma.incomeAllocation.create({ data: { householdId: household?.householdId!, incomeId: id, variableExpenseId: varId, amount, period: allocPeriodUpd } });
         }
       } else if (key.startsWith('alloc_')) {
         const fixedId = key.replace('alloc_', '');
         const amount = parseCurrency(val as string);
         if (!isNaN(amount) && amount > 0) {
           const household = await prisma.income.findUnique({ where: { id }, select: { householdId: true } });
-          try { await prisma.incomeAllocation.create({ data: { householdId: household?.householdId!, incomeId: id, fixedExpenseId: fixedId, amount } }); } catch {}
+          try { await prisma.incomeAllocation.create({ data: { householdId: household?.householdId!, incomeId: id, fixedExpenseId: fixedId, amount, period: allocPeriodUpd } }); } catch {}
         }
       }
     }
