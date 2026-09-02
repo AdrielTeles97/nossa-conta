@@ -153,8 +153,12 @@ export async function addVariableExpense(formData: FormData) {
     const value = parseCurrency(formData.get('value') as string);
     const category = formData.get('category') as string;
     const dateStr = formData.get('date') as string;
+    console.log("[addVariableExpense] received", { name, value, category, dateStr, rawValue: formData.get('value') });
 
-    if (!name || isNaN(value) || !category || !dateStr) return;
+    if (!name || isNaN(value) || !category || !dateStr) {
+      console.log("[addVariableExpense] validation failed", { name: !!name, value: !isNaN(value), category: !!category, dateStr: !!dateStr });
+      return;
+    }
 
     await prisma.variableExpense.create({
         data: {
