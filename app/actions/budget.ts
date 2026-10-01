@@ -250,7 +250,7 @@ export async function toggleFixedExpense(formData: FormData) {
   if (fixed.linkedDebtId) {
     const debt = await prisma.debt.findUnique({ where: { id: fixed.linkedDebtId } });
     if (!debt) {
-      await prisma.fixedExpense.update({ where: { id }, data: { paid: !fixed.paid } });
+      await toggleFixedPaymentRecord(fixed as any, period);
       revalidateBudgetPaths();
       return;
     }
@@ -277,8 +277,47 @@ export async function toggleFixedExpense(formData: FormData) {
       ]);
     }
   } else {
-    await prisma.fixedExpense.update({ where: { id }, data: { paid: !fixed.paid } });
+    await toggleFixedPaymentRecord(fixed as any, period);
   }
   revalidateBudgetPaths();
   revalidatePath(`/dashboard/patrimonio`);
+}
+
+async function toggleFixedPaymentRecord(fixed: { id: string; householdId: string | null; userId: string; value: unknown }, period: string) {
+  const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
+  const householdId = fixed.householdId || (session ? (await getOrCreateHouseholdForUser(session.user.id)).id : null);
+  const userId = session?.user?.id || fixed.userId;
+  if (!householdId) return;
+  const existing = await (prisma as any).fixedExpensePayment.findUnique({
+    where: { fixedExpenseId_competence: { fixedExpenseId: fixed.id, competence: period } },
+  }).catch(() => null);
+  if (existing) {
+    await (prisma as any).fixedExpensePayment.delete({ where: { id: existing.id } });
+  } else {
+    await (prisma as any).fixedExpensePayment.create({
+      data: { fixedExpenseId: fixed.id, householdId, userId, competence: period, amount: Number(fixed.value as any), paidAt: new Date() },
+    });
+  }
+}
+
+export async function toggleIncomeReceived(formData: FormData) {
+  const id = formData.get("id") as string;
+  const period = (formData.get("period") as string) || new Date().toISOString().slice(0, 7);
+  const income = await prisma.income.findUnique({ where: { id } });
+  if (!income) return;
+  const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
+  const householdId = income.householdId || (session ? (await getOrCreateHouseholdForUser(session.user.id)).id : null);
+  const userId = session?.user?.id || income.userId;
+  if (!householdId) return;
+  const existing = await (prisma as any).incomeReceipt.findUnique({
+    where: { incomeId_competence: { incomeId: id, competence: period } },
+  }).catch(() => null);
+  if (existing) {
+    await (prisma as any).incomeReceipt.delete({ where: { id: existing.id } });
+  } else {
+    await (prisma as any).incomeReceipt.create({
+      data: { incomeId: id, householdId, userId, competence: period, amount: Number(income.value as any), receivedAt: new Date() },
+    });
+  }
+  revalidateBudgetPaths();
 }

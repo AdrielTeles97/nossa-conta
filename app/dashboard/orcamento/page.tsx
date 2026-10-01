@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { getOrCreateHouseholdForUser } from "@/lib/household";
-import { deleteIncome, deleteFixedExpense, deleteVariableExpense, toggleFixedExpense } from "@/app/actions/budget";
+import { deleteIncome, deleteFixedExpense, deleteVariableExpense, toggleFixedExpense, toggleIncomeReceived } from "@/app/actions/budget";
 import { Card, CardContent } from "@/components/ui/card";
 import { IncomeModal } from "@/app/dashboard/_components/modals/IncomeModal";
 import { FixedExpenseModal } from "@/app/dashboard/_components/modals/FixedExpenseModal";
@@ -61,11 +61,17 @@ export default async function BudgetPage({
   // Na prática filtra no JS para manter isRecurring/period lógico simples
   const allFixed = baseWhere ? await prisma.fixedExpense.findMany({ where: baseWhere, orderBy: [{ isRecurring: "desc" }, { dueDay: "asc" }], include: { user: { select: { name: true } }, linkedDebt: { select: { id: true, name: true } } } }) : [];
   const debtPaymentsForPeriod = householdId ? await prisma.debtPayment.findMany({ where: { householdId, competence: period } }) : [];
+  const fixedPaymentsForPeriod = householdId ? await (prisma as any).fixedExpensePayment.findMany({ where: { householdId, competence: period } }).catch(() => []) : [];
+  const incomeReceiptsForPeriod = householdId ? await (prisma as any).incomeReceipt.findMany({ where: { householdId, competence: period } }).catch(() => []) : [];
   const isFixedPaidForPeriod = (f: any) => {
     if (f.linkedDebtId) {
-      return debtPaymentsForPeriod.some((p) => p.debtId === f.linkedDebtId);
+      return debtPaymentsForPeriod.some((p: any) => p.debtId === f.linkedDebtId);
     }
-    return f.paid;
+    return fixedPaymentsForPeriod.some((p: any) => p.fixedExpenseId === f.id);
+  };
+  const isIncomeReceivedForPeriod = (inc: any) => {
+    if (!inc.isRecurring) return true;
+    return incomeReceiptsForPeriod.some((r: any) => r.incomeId === inc.id);
   };
   const fixedExpenses = allFixed.filter((f: any) => {
     if (categoryFilter && f.category !== categoryFilter) return false;
@@ -107,15 +113,30 @@ export default async function BudgetPage({
       const prevEnd = new Date(py, pm - 1, 1);
       const prevCashRec = await prisma.cashBalance.findUnique({ where: { householdId_period: { householdId, period: prevPeriod } } });
       const prevCash = prevCashRec ? Number(prevCashRec.amount) : 0;
-      const [prevIncomes, prevVars] = baseWhere
+      const [prevIncomes, prevVars, prevReceipts, prevFixedPays, prevDebtPays] = baseWhere
         ? await Promise.all([
             prisma.income.findMany({ where: { ...baseWhere, OR: [{ isRecurring: true }, { createdAt: { gte: prevStart, lt: prevEnd } }] } }),
             prisma.variableExpense.findMany({ where: { ...baseWhere, date: { gte: prevStart, lt: prevEnd } } }),
+            (prisma as any).incomeReceipt.findMany({ where: { householdId, competence: prevPeriod } }).catch(() => []),
+            (prisma as any).fixedExpensePayment.findMany({ where: { householdId, competence: prevPeriod } }).catch(() => []),
+            prisma.debtPayment.findMany({ where: { householdId, competence: prevPeriod } }),
           ])
-        : [[], []];
-      const prevRaw = prevIncomes.reduce((a, c) => a + Number((c as any).value), 0);
-      const prevVar = prevVars.reduce((a, c) => a + Number((c as any).value), 0);
-      const prevFix = fixedExpenses.reduce((a, c) => a + Number(c.value), 0);
+        : [[], [], [], [], []];
+      // só recorrente recebido conta; pontual conta direto
+      const prevReceivedIds = new Set((prevReceipts as any[]).map((r: any) => r.incomeId));
+      const prevRaw = (prevIncomes as any[]).filter((c: any) => !c.isRecurring || prevReceivedIds.has(c.id)).reduce((a, c) => a + Number((c as any).value), 0);
+      const prevVar = (prevVars as any[]).reduce((a, c) => a + Number((c as any).value), 0);
+      // fixas do mês anterior: só as pagas naquela competência
+      const prevPaidFixedIds = new Set((prevFixedPays as any[]).map((p: any) => p.fixedExpenseId));
+      const prevPaidDebtIds = new Set((prevDebtPays as any[]).map((p: any) => p.debtId));
+      const prevFix = (allFixed as any[]).filter((f: any) => {
+        if (f.isRecurring) return true;
+        if (!f.period) return true;
+        return f.period === prevPeriod;
+      }).filter((f: any) => {
+        if (f.linkedDebtId) return prevPaidDebtIds.has(f.linkedDebtId);
+        return prevPaidFixedIds.has(f.id);
+      }).reduce((a, c) => a + Number(c.value), 0);
       const prevInvest = prevRaw * ((user?.investmentTargetPct ?? 0) / 100);
       const prevBalance = prevRaw + prevCash - prevVar - prevFix - prevInvest;
       cashInitial = prevBalance > 0 ? prevBalance : 0;
@@ -124,24 +145,33 @@ export default async function BudgetPage({
   }
 
   // Matemática dos Cards (com caixa) — fixas só contam quando pagas (toggle)
-  const totalIncomeRaw = incomes.reduce((acc, curr) => acc + Number(curr.value), 0);
+  const totalIncomePrevista = incomes.reduce((acc, curr) => acc + Number(curr.value), 0);
+  const receivedIncomes = incomes.filter((inc: any) => isIncomeReceivedForPeriod(inc));
+  const totalIncomeRaw = receivedIncomes.reduce((acc, curr) => acc + Number(curr.value), 0);
+  const totalIncomePending = totalIncomePrevista - totalIncomeRaw;
   const totalIncomeAvailable = totalIncomeRaw + cashInitial;
   const totalVariables = variableExpenses.reduce((acc, curr) => acc + Number(curr.value), 0);
-  // só fixas pagas viram despesa no mês (indica valor saiu do saldo)
-  const totalFixed = fixedExpenses.filter((f: any) => f.paid).reduce((acc, curr) => acc + Number(curr.value), 0);
-  // para cards, usa total de fixas pagas; para histórico total sem filtro de categoria, já está correto
-  // mas se houver filtro de categoria, cards devem ignorar filtro — então recalcula sem filtro de categoria para cards
+  // só fixas pagas na competência viram despesa no mês
+  const totalFixed = fixedExpenses.filter((f: any) => isFixedPaidForPeriod(f)).reduce((acc, curr) => acc + Number(curr.value), 0);
+  // para cards, usa total de fixas pagas filtrando período
   const totalFixedForCard = allFixed.filter((f: any) => {
-    if (f.isRecurring) return f.paid;
-    if (!f.period) return f.paid;
-    return f.period === period && f.paid;
+    const paid = isFixedPaidForPeriod(f);
+    if (!paid) return false;
+    if (f.isRecurring) return true;
+    if (!f.period) return true;
+    return f.period === period;
+  }).reduce((acc: number, curr: any) => acc + Number(curr.value), 0);
+  const totalFixedPrevista = allFixed.filter((f: any) => {
+    if (f.isRecurring) return true;
+    if (!f.period) return true;
+    return f.period === period;
   }).reduce((acc: number, curr: any) => acc + Number(curr.value), 0);
   
-  const totalExpenses = totalVariables + totalFixedForCard;
+const totalExpenses = totalVariables + totalFixedForCard;
   const investTargetPct = user?.investmentTargetPct || 0;
   const investAmount = totalIncomeRaw * (investTargetPct / 100);
   const balance = totalIncomeAvailable - totalExpenses - investAmount;
-  // para compatibilidade com cards antigos, totalIncome exibido é o raw; total para saldo é available
+  // totalIncome exibido é o recebido (real); previsto total fica disponível para referência
   const totalIncome = totalIncomeRaw;
 
   const fmt = (v: any) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
